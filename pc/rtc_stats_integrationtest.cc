@@ -516,6 +516,8 @@ class RTCStatsReportVerifier {
     verifier.TestMemberIsNonNegative<uint64_t>(candidate_pair.responses_sent);
     verifier.TestMemberIsNonNegative<uint64_t>(
         candidate_pair.consent_requests_sent);
+    verifier.TestMemberIsDefined(candidate_pair.last_packet_received_timestamp);
+    verifier.TestMemberIsDefined(candidate_pair.last_packet_sent_timestamp);
 
     return verifier.ExpectAllMembersSuccessfullyTested();
   }
@@ -595,16 +597,6 @@ class RTCStatsReportVerifier {
             media_stream_track.frames_decoded);
         verifier.TestMemberIsNonNegative<uint32_t>(
             media_stream_track.frames_dropped);
-        // TODO(crbug.com/webrtc/14521): These metrics have been moved, delete
-        // them from "track".
-        verifier.TestMemberIsNonNegative<uint32_t>(
-            media_stream_track.freeze_count);
-        verifier.TestMemberIsNonNegative<uint32_t>(
-            media_stream_track.pause_count);
-        verifier.TestMemberIsNonNegative<double>(
-            media_stream_track.total_freezes_duration);
-        verifier.TestMemberIsNonNegative<double>(
-            media_stream_track.total_pauses_duration);
       } else {
         verifier.TestMemberIsIDReference(media_stream_track.media_source_id,
                                          RTCVideoSourceStats::kType);
@@ -619,14 +611,6 @@ class RTCStatsReportVerifier {
         verifier.TestMemberIsUndefined(media_stream_track.frames_received);
         verifier.TestMemberIsUndefined(media_stream_track.frames_decoded);
         verifier.TestMemberIsUndefined(media_stream_track.frames_dropped);
-        // TODO(crbug.com/webrtc/14521): These metrics have been moved, delete
-        // them from "track".
-        verifier.TestMemberIsUndefined(media_stream_track.freeze_count);
-        verifier.TestMemberIsUndefined(media_stream_track.pause_count);
-        verifier.TestMemberIsUndefined(
-            media_stream_track.total_freezes_duration);
-        verifier.TestMemberIsUndefined(
-            media_stream_track.total_pauses_duration);
       }
       // Video-only members
       verifier.TestMemberIsNonNegative<uint32_t>(
@@ -649,16 +633,6 @@ class RTCStatsReportVerifier {
           media_stream_track.inserted_samples_for_deceleration);
       verifier.TestMemberIsUndefined(
           media_stream_track.removed_samples_for_acceleration);
-      // TODO(crbug.com/webrtc/14524): These metrics have been moved from
-      // "track" stats, delete them.
-      verifier.TestMemberIsUndefined(media_stream_track.jitter_buffer_flushes);
-      verifier.TestMemberIsUndefined(
-          media_stream_track.delayed_packet_outage_samples);
-      verifier.TestMemberIsUndefined(
-          media_stream_track.relative_packet_arrival_delay);
-      verifier.TestMemberIsUndefined(media_stream_track.interruption_count);
-      verifier.TestMemberIsUndefined(
-          media_stream_track.total_interruption_duration);
     } else {
       RTC_DCHECK_EQ(*media_stream_track.kind, RTCMediaStreamTrackKind::kAudio);
       // The type of the referenced media source depends on kind.
@@ -686,18 +660,6 @@ class RTCStatsReportVerifier {
             media_stream_track.inserted_samples_for_deceleration);
         verifier.TestMemberIsNonNegative<uint64_t>(
             media_stream_track.removed_samples_for_acceleration);
-        // TODO(crbug.com/webrtc/14524): These metrics have been moved from
-        // "track" stats, delete them.
-        verifier.TestMemberIsNonNegative<uint64_t>(
-            media_stream_track.jitter_buffer_flushes);
-        verifier.TestMemberIsNonNegative<uint64_t>(
-            media_stream_track.delayed_packet_outage_samples);
-        verifier.TestMemberIsNonNegative<double>(
-            media_stream_track.relative_packet_arrival_delay);
-        verifier.TestMemberIsNonNegative<uint32_t>(
-            media_stream_track.interruption_count);
-        verifier.TestMemberIsNonNegative<double>(
-            media_stream_track.total_interruption_duration);
       } else {
         verifier.TestMemberIsIDReference(media_stream_track.media_source_id,
                                          RTCAudioSourceStats::kType);
@@ -719,17 +681,6 @@ class RTCStatsReportVerifier {
             media_stream_track.inserted_samples_for_deceleration);
         verifier.TestMemberIsUndefined(
             media_stream_track.removed_samples_for_acceleration);
-        // TODO(crbug.com/webrtc/14524): These metrics have been moved from
-        // "track" stats, delete them.
-        verifier.TestMemberIsUndefined(
-            media_stream_track.jitter_buffer_flushes);
-        verifier.TestMemberIsUndefined(
-            media_stream_track.delayed_packet_outage_samples);
-        verifier.TestMemberIsUndefined(
-            media_stream_track.relative_packet_arrival_delay);
-        verifier.TestMemberIsUndefined(media_stream_track.interruption_count);
-        verifier.TestMemberIsUndefined(
-            media_stream_track.total_interruption_duration);
       }
       // Video-only members should be undefined
       verifier.TestMemberIsUndefined(media_stream_track.frame_width);
@@ -747,12 +698,6 @@ class RTCStatsReportVerifier {
       verifier.MarkMemberTested(media_stream_track.echo_return_loss, true);
       verifier.MarkMemberTested(media_stream_track.echo_return_loss_enhancement,
                                 true);
-      // TODO(crbug.com/webrtc/14521): These metrics have been moved, delete
-      // them from "track".
-      verifier.TestMemberIsUndefined(media_stream_track.freeze_count);
-      verifier.TestMemberIsUndefined(media_stream_track.pause_count);
-      verifier.TestMemberIsUndefined(media_stream_track.total_freezes_duration);
-      verifier.TestMemberIsUndefined(media_stream_track.total_pauses_duration);
     }
     return verifier.ExpectAllMembersSuccessfullyTested();
   }
