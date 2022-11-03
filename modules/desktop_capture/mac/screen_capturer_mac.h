@@ -70,6 +70,18 @@ class ScreenCapturerMac final : public DesktopCapturer {
                      const CGRect* rect_array,
                      DesktopVector display_origin,
                      IOSurfaceRef io_surface);
+  void ScreenRefresh(CGRectCount count,
+                                        const CGRect* rect_array);
+  void ScreenUpdateMove(CGScreenUpdateMoveDelta delta,
+                        size_t count,
+                        const CGRect *rect_array);
+  static void ScreenRefreshCallback(CGRectCount count,
+                                    const CGRect *rect_array,
+                                    void *user_parameter);
+  static void ScreenUpdateMoveCallback(CGScreenUpdateMoveDelta delta,
+                                       size_t count,
+                                       const CGRect *rect_array,
+                                       void *user_parameter);
   void ReleaseBuffers();
 
   std::unique_ptr<DesktopFrame> CreateFrame();
