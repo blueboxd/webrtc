@@ -439,71 +439,93 @@ void ScreenCapturerMac::ScreenConfigurationChanged() {
 
 bool ScreenCapturerMac::RegisterRefreshAndMoveHandlers() {
   RTC_DCHECK(thread_checker_.IsCurrent());
-  desktop_config_ = desktop_config_monitor_->desktop_configuration();
-  for (const auto& config : desktop_config_.displays) {
-    size_t pixel_width = config.pixel_bounds.width();
-    size_t pixel_height = config.pixel_bounds.height();
-    if (pixel_width == 0 || pixel_height == 0) continue;
-    CGDirectDisplayID display_id = config.id;
-    DesktopVector display_origin = config.pixel_bounds.top_left();
+  if(@available(macOS 10.8,*)) {
+    desktop_config_ = desktop_config_monitor_->desktop_configuration();
+    for (const auto& config : desktop_config_.displays) {
+      size_t pixel_width = config.pixel_bounds.width();
+      size_t pixel_height = config.pixel_bounds.height();
+      if (pixel_width == 0 || pixel_height == 0) continue;
+      CGDirectDisplayID display_id = config.id;
+      DesktopVector display_origin = config.pixel_bounds.top_left();
 
-    CGDisplayStreamFrameAvailableHandler handler = ^(CGDisplayStreamFrameStatus status,
-                                                     uint64_t display_time,
-                                                     IOSurfaceRef frame_surface,
-                                                     CGDisplayStreamUpdateRef updateRef) {
-      RTC_DCHECK(thread_checker_.IsCurrent());
-      if (status == kCGDisplayStreamFrameStatusStopped) return;
+      CGDisplayStreamFrameAvailableHandler handler = ^(CGDisplayStreamFrameStatus status,
+                                                      uint64_t display_time,
+                                                      IOSurfaceRef frame_surface,
+                                                      CGDisplayStreamUpdateRef updateRef) {
+        RTC_DCHECK(thread_checker_.IsCurrent());
+        if (status == kCGDisplayStreamFrameStatusStopped) return;
 
-      // Only pay attention to frame updates.
-      if (status != kCGDisplayStreamFrameStatusFrameComplete) return;
+        // Only pay attention to frame updates.
+        if (status != kCGDisplayStreamFrameStatusFrameComplete) return;
 
-      size_t count = 0;
-      const CGRect* rects =
-          CGDisplayStreamUpdateGetRects(updateRef, kCGDisplayStreamUpdateDirtyRects, &count);
-      if (count != 0) {
-        // According to CGDisplayStream.h, it's safe to call
-        // CGDisplayStreamStop() from within the callback.
-        ScreenRefresh(display_id, count, rects, display_origin, frame_surface);
+        size_t count = 0;
+        const CGRect* rects =
+            CGDisplayStreamUpdateGetRects(updateRef, kCGDisplayStreamUpdateDirtyRects, &count);
+        if (count != 0) {
+          // According to CGDisplayStream.h, it's safe to call
+          // CGDisplayStreamStop() from within the callback.
+          ScreenRefresh(display_id, count, rects, display_origin, frame_surface);
+        }
+      };
+
+      rtc::ScopedCFTypeRef<CFDictionaryRef> properties_dict(
+          CFDictionaryCreate(kCFAllocatorDefault,
+                            (const void* []){kCGDisplayStreamShowCursor},
+                            (const void* []){kCFBooleanFalse},
+                            1,
+                            &kCFTypeDictionaryKeyCallBacks,
+                            &kCFTypeDictionaryValueCallBacks));
+
+      CGDisplayStreamRef display_stream = CGDisplayStreamCreate(
+          display_id, pixel_width, pixel_height, 'BGRA', properties_dict.get(), handler);
+
+      if (display_stream) {
+        CGError error = CGDisplayStreamStart(display_stream);
+        if (error != kCGErrorSuccess) return false;
+
+        CFRunLoopSourceRef source = CGDisplayStreamGetRunLoopSource(display_stream);
+        CFRunLoopAddSource(CFRunLoopGetCurrent(), source, kCFRunLoopCommonModes);
+        display_streams_.push_back(display_stream);
       }
-    };
+    }
+  } else {
+    CGError err = CGRegisterScreenRefreshCallback(
+        ScreenCapturerMac::ScreenRefreshCallback, this);
+    if (err != kCGErrorSuccess) {
+      RTC_LOG(LS_ERROR) << "CGRegisterScreenRefreshCallback " << err;
+      return false;
+    }
 
-    rtc::ScopedCFTypeRef<CFDictionaryRef> properties_dict(
-        CFDictionaryCreate(kCFAllocatorDefault,
-                           (const void* []){kCGDisplayStreamShowCursor},
-                           (const void* []){kCFBooleanFalse},
-                           1,
-                           &kCFTypeDictionaryKeyCallBacks,
-                           &kCFTypeDictionaryValueCallBacks));
-
-    CGDisplayStreamRef display_stream = CGDisplayStreamCreate(
-        display_id, pixel_width, pixel_height, 'BGRA', properties_dict.get(), handler);
-
-    if (display_stream) {
-      CGError error = CGDisplayStreamStart(display_stream);
-      if (error != kCGErrorSuccess) return false;
-
-      CFRunLoopSourceRef source = CGDisplayStreamGetRunLoopSource(display_stream);
-      CFRunLoopAddSource(CFRunLoopGetCurrent(), source, kCFRunLoopCommonModes);
-      display_streams_.push_back(display_stream);
+    err = CGScreenRegisterMoveCallback(
+        ScreenCapturerMac::ScreenUpdateMoveCallback, this);
+    if (err != kCGErrorSuccess) {
+      RTC_LOG(LS_ERROR) << "CGScreenRegisterMoveCallback " << err;
+      return false;
     }
   }
-
   return true;
 }
 
 void ScreenCapturerMac::UnregisterRefreshAndMoveHandlers() {
   RTC_DCHECK(thread_checker_.IsCurrent());
 
-  for (CGDisplayStreamRef stream : display_streams_) {
-    CFRunLoopSourceRef source = CGDisplayStreamGetRunLoopSource(stream);
-    CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source, kCFRunLoopCommonModes);
-    CGDisplayStreamStop(stream);
-    CFRelease(stream);
-  }
-  display_streams_.clear();
+  if(@available(macOS 10.8,*)) {
+    for (CGDisplayStreamRef stream : display_streams_) {
+      CFRunLoopSourceRef source = CGDisplayStreamGetRunLoopSource(stream);
+      CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source, kCFRunLoopCommonModes);
+      CGDisplayStreamStop(stream);
+      CFRelease(stream);
+    }
+    display_streams_.clear();
 
-  // Release obsolete io surfaces.
-  desktop_frame_provider_.Release();
+    // Release obsolete io surfaces.
+    desktop_frame_provider_.Release();
+  } else {
+    CGUnregisterScreenRefreshCallback(
+        ScreenCapturerMac::ScreenRefreshCallback, this);
+    CGScreenUnregisterMoveCallback(
+        ScreenCapturerMac::ScreenUpdateMoveCallback, this);
+  }
 }
 
 void ScreenCapturerMac::ScreenRefresh(CGDirectDisplayID display_id,
@@ -537,6 +559,58 @@ void ScreenCapturerMac::ScreenRefresh(CGDirectDisplayID display_id,
   desktop_frame_provider_.InvalidateIOSurface(
       display_id, rtc::ScopedCFTypeRef<IOSurfaceRef>(io_surface, rtc::RetainPolicy::RETAIN));
   helper_.InvalidateRegion(region);
+}
+
+void ScreenCapturerMac::ScreenRefresh(CGRectCount count,
+                                      const CGRect* rect_array) {
+  if (screen_pixel_bounds_.is_empty())
+    return;
+
+  DesktopRegion region;
+  DesktopVector translate_vector =
+      DesktopVector().subtract(screen_pixel_bounds_.top_left());
+  for (CGRectCount i = 0; i < count; ++i) {
+    // Convert from Density-Independent Pixel to physical pixel coordinates.
+    DesktopRect rect = ScaleAndRoundCGRect(rect_array[i], dip_to_pixel_scale_);
+    // Translate from local desktop to capturer framebuffer coordinates.
+    rect.Translate(translate_vector);
+    region.AddRect(rect);
+  }
+
+  helper_.InvalidateRegion(region);
+}
+
+void ScreenCapturerMac::ScreenUpdateMove(CGScreenUpdateMoveDelta delta,
+                                         size_t count,
+                                         const CGRect* rect_array) {
+  // Translate |rect_array| to identify the move's destination.
+  CGRect refresh_rects[count];
+  for (CGRectCount i = 0; i < count; ++i) {
+    refresh_rects[i] = CGRectOffset(rect_array[i], delta.dX, delta.dY);
+  }
+
+  // Currently we just treat move events the same as refreshes.
+  ScreenRefresh(count, refresh_rects);
+}
+
+void ScreenCapturerMac::ScreenRefreshCallback(CGRectCount count,
+                                              const CGRect* rect_array,
+                                              void* user_parameter) {
+  ScreenCapturerMac* capturer =
+      reinterpret_cast<ScreenCapturerMac*>(user_parameter);
+  if (capturer->screen_pixel_bounds_.is_empty())
+    capturer->ScreenConfigurationChanged();
+  capturer->ScreenRefresh(count, rect_array);
+}
+
+void ScreenCapturerMac::ScreenUpdateMoveCallback(
+    CGScreenUpdateMoveDelta delta,
+    size_t count,
+    const CGRect* rect_array,
+    void* user_parameter) {
+  ScreenCapturerMac* capturer =
+      reinterpret_cast<ScreenCapturerMac*>(user_parameter);
+  capturer->ScreenUpdateMove(delta, count, rect_array);
 }
 
 std::unique_ptr<DesktopFrame> ScreenCapturerMac::CreateFrame() {
