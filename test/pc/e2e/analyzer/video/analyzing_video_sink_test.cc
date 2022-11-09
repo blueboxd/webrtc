@@ -19,7 +19,7 @@
 #include "api/scoped_refptr.h"
 #include "api/test/create_frame_generator.h"
 #include "api/test/frame_generator_interface.h"
-#include "api/test/peerconnection_quality_test_fixture.h"
+#include "api/test/pclf/media_configuration.h"
 #include "api/units/time_delta.h"
 #include "api/units/timestamp.h"
 #include "api/video/i420_buffer.h"
@@ -40,23 +40,16 @@ namespace {
 
 using ::testing::ElementsAreArray;
 using ::testing::Eq;
+using ::testing::Ge;
 using ::testing::Test;
-
-using VideoConfig =
-    ::webrtc::webrtc_pc_e2e::PeerConnectionE2EQualityTestFixture::VideoConfig;
-using VideoSubscription = ::webrtc::webrtc_pc_e2e::
-    PeerConnectionE2EQualityTestFixture::VideoSubscription;
-using VideoResolution = ::webrtc::webrtc_pc_e2e::
-    PeerConnectionE2EQualityTestFixture::VideoResolution;
-using VideoDumpOptions = ::webrtc::webrtc_pc_e2e::
-    PeerConnectionE2EQualityTestFixture::VideoDumpOptions;
 
 // Remove files and directories in a directory non-recursively.
 void CleanDir(absl::string_view dir, size_t expected_output_files_count) {
   absl::optional<std::vector<std::string>> dir_content =
       test::ReadDirectory(dir);
   if (expected_output_files_count == 0) {
-    ASSERT_FALSE(dir_content.has_value()) << "Empty directory is expected";
+    ASSERT_TRUE(!dir_content.has_value() || dir_content->empty())
+        << "Empty directory is expected";
   } else {
     ASSERT_TRUE(dir_content.has_value()) << "Test directory is empty!";
     EXPECT_EQ(dir_content->size(), expected_output_files_count);
@@ -158,7 +151,7 @@ TEST_F(AnalyzingVideoSinkTest, VideoFramesAreDumpedCorrectly) {
     AnalyzingVideoSinksHelper helper;
     helper.AddConfig("alice", video_config);
     AnalyzingVideoSink sink("bob", Clock::GetRealTimeClock(), analyzer, helper,
-                            subscription);
+                            subscription, /*report_infra_stats=*/false);
     sink.OnFrame(frame);
   }
 
@@ -201,7 +194,7 @@ TEST_F(AnalyzingVideoSinkTest,
     AnalyzingVideoSinksHelper helper;
     helper.AddConfig("alice", video_config);
     AnalyzingVideoSink sink("bob", Clock::GetRealTimeClock(), analyzer, helper,
-                            subscription);
+                            subscription, /*report_infra_stats=*/false);
     sink.OnFrame(frame);
   }
 
@@ -246,7 +239,7 @@ TEST_F(AnalyzingVideoSinkTest,
     AnalyzingVideoSinksHelper helper;
     helper.AddConfig("alice", video_config);
     AnalyzingVideoSink sink("bob", Clock::GetRealTimeClock(), analyzer, helper,
-                            subscription);
+                            subscription, /*report_infra_stats=*/false);
     sink.OnFrame(frame);
   }
 
@@ -298,7 +291,7 @@ TEST_F(AnalyzingVideoSinkTest,
     AnalyzingVideoSinksHelper helper;
     helper.AddConfig("alice", video_config);
     AnalyzingVideoSink sink("bob", Clock::GetRealTimeClock(), analyzer, helper,
-                            subscription_before);
+                            subscription_before, /*report_infra_stats=*/false);
     sink.OnFrame(frame_before);
 
     sink.UpdateSubscription(subscription_after);
@@ -371,7 +364,7 @@ TEST_F(AnalyzingVideoSinkTest,
     AnalyzingVideoSinksHelper helper;
     helper.AddConfig("alice", video_config);
     AnalyzingVideoSink sink("bob", Clock::GetRealTimeClock(), analyzer, helper,
-                            subscription_before);
+                            subscription_before, /*report_infra_stats=*/false);
     sink.OnFrame(frame_before);
 
     sink.UpdateSubscription(subscription_after);
@@ -426,7 +419,7 @@ TEST_F(AnalyzingVideoSinkTest, SmallDiviationsInAspectRationAreAllowed) {
     AnalyzingVideoSinksHelper helper;
     helper.AddConfig("alice", video_config);
     AnalyzingVideoSink sink("bob", Clock::GetRealTimeClock(), analyzer, helper,
-                            subscription);
+                            subscription, /*report_infra_stats=*/false);
     sink.OnFrame(frame);
   }
 
@@ -473,7 +466,7 @@ TEST_F(AnalyzingVideoSinkTest, VideoFramesIdsAreDumpedWhenRequested) {
     AnalyzingVideoSinksHelper helper;
     helper.AddConfig("alice", video_config);
     AnalyzingVideoSink sink("bob", Clock::GetRealTimeClock(), analyzer, helper,
-                            subscription);
+                            subscription, /*report_infra_stats=*/false);
     for (int i = 0; i < 10; ++i) {
       VideoFrame frame = CreateFrame(*frame_generator);
       frame.set_id(analyzer.OnFrameCaptured("alice", "alice_video", frame));
@@ -520,7 +513,7 @@ TEST_F(AnalyzingVideoSinkTest,
     AnalyzingVideoSinksHelper helper;
     helper.AddConfig("alice", video_config);
     AnalyzingVideoSink sink("bob", simulated_time.GetClock(), analyzer, helper,
-                            subscription);
+                            subscription, /*report_infra_stats=*/false);
     sink.OnFrame(frame1);
     // Advance almost 1 second, so the first frame has to be repeated 9 time
     // more.
@@ -567,6 +560,61 @@ TEST_F(AnalyzingVideoSinkTest,
        std::to_string(frame2.id())});
 
   ExpectOutputFilesCount(2);
+}
+
+TEST_F(AnalyzingVideoSinkTest, InfraMetricsCollectedWhenRequested) {
+  VideoSubscription subscription;
+  subscription.SubscribeToPeer(
+      "alice", VideoResolution(/*width=*/1280, /*height=*/720, /*fps=*/30));
+  VideoConfig video_config("alice_video", /*width=*/640, /*height=*/360,
+                           /*fps=*/30);
+
+  ExampleVideoQualityAnalyzer analyzer;
+  std::unique_ptr<test::FrameGeneratorInterface> frame_generator =
+      CreateFrameGenerator(/*width=*/640, /*height=*/360);
+  VideoFrame frame = CreateFrame(*frame_generator);
+  frame.set_id(analyzer.OnFrameCaptured("alice", "alice_video", frame));
+
+  AnalyzingVideoSinksHelper helper;
+  helper.AddConfig("alice", video_config);
+  AnalyzingVideoSink sink("bob", Clock::GetRealTimeClock(), analyzer, helper,
+                          subscription, /*report_infra_stats=*/true);
+  sink.OnFrame(frame);
+
+  AnalyzingVideoSink::Stats stats = sink.stats();
+  EXPECT_THAT(stats.scaling_tims_ms.NumSamples(), Eq(1));
+  EXPECT_THAT(stats.scaling_tims_ms.GetAverage(), Ge(0));
+  EXPECT_THAT(stats.analyzing_sink_processing_time_ms.NumSamples(), Eq(1));
+  EXPECT_THAT(stats.analyzing_sink_processing_time_ms.GetAverage(),
+              Ge(stats.scaling_tims_ms.GetAverage()));
+
+  ExpectOutputFilesCount(0);
+}
+
+TEST_F(AnalyzingVideoSinkTest, InfraMetricsNotCollectedWhenNotRequested) {
+  VideoSubscription subscription;
+  subscription.SubscribeToPeer(
+      "alice", VideoResolution(/*width=*/1280, /*height=*/720, /*fps=*/30));
+  VideoConfig video_config("alice_video", /*width=*/640, /*height=*/360,
+                           /*fps=*/30);
+
+  ExampleVideoQualityAnalyzer analyzer;
+  std::unique_ptr<test::FrameGeneratorInterface> frame_generator =
+      CreateFrameGenerator(/*width=*/640, /*height=*/360);
+  VideoFrame frame = CreateFrame(*frame_generator);
+  frame.set_id(analyzer.OnFrameCaptured("alice", "alice_video", frame));
+
+  AnalyzingVideoSinksHelper helper;
+  helper.AddConfig("alice", video_config);
+  AnalyzingVideoSink sink("bob", Clock::GetRealTimeClock(), analyzer, helper,
+                          subscription, /*report_infra_stats=*/false);
+  sink.OnFrame(frame);
+
+  AnalyzingVideoSink::Stats stats = sink.stats();
+  EXPECT_THAT(stats.scaling_tims_ms.NumSamples(), Eq(0));
+  EXPECT_THAT(stats.analyzing_sink_processing_time_ms.NumSamples(), Eq(0));
+
+  ExpectOutputFilesCount(0);
 }
 
 }  // namespace

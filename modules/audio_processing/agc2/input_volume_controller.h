@@ -11,7 +11,6 @@
 #ifndef MODULES_AUDIO_PROCESSING_AGC2_INPUT_VOLUME_CONTROLLER_H_
 #define MODULES_AUDIO_PROCESSING_AGC2_INPUT_VOLUME_CONTROLLER_H_
 
-#include <atomic>
 #include <memory>
 #include <vector>
 
@@ -26,11 +25,10 @@ namespace webrtc {
 
 class MonoInputVolumeController;
 
-// Input volume controller that controls the input volume. The input volume
-// controller recommends what volume to use, handles volume changes and
-// clipping. In particular, it handles changes triggered by the user (e.g.,
-// volume set to zero by a HW mute button). The digital controller chooses and
-// applies the digital compression gain. This class is not thread-safe.
+// The input volume controller recommends what volume to use, handles volume
+// changes and clipping detection and prediction. In particular, it handles
+// changes triggered by the user (e.g., volume set to zero by a HW mute button).
+// This class is not thread-safe.
 // TODO(bugs.webrtc.org/7494): Use applied/recommended input volume naming
 // convention.
 class InputVolumeController final {
@@ -54,8 +52,17 @@ class InputVolumeController final {
     int clipped_wait_frames = 300;
     // Enables clipping prediction functionality.
     bool enable_clipping_predictor = false;
-    // Maximum digital gain used before input volume is adjusted.
-    int max_digital_gain_db = 30;
+    // Speech level target range (dBFS). If the speech level is in the range
+    // [`target_range_min_dbfs`, `target_range_max_dbfs`], no input volume
+    // adjustments are done based on the speech level. For speech levels below
+    // and above the range, the targets `target_range_min_dbfs` and
+    // `target_range_max_dbfs` are used, respectively. The example values
+    // `target_range_max_dbfs` -18 and `target_range_min_dbfs` -48 refer to a
+    // configuration where the zero-digital-gain target is -18 dBFS and the
+    // digital gain control is expected to compensate for speech level errors
+    // up to -30 dB.
+    int target_range_max_dbfs = -18;
+    int target_range_min_dbfs = -48;
   };
 
   // Ctor. `num_capture_channels` specifies the number of channels for the audio
@@ -67,8 +74,7 @@ class InputVolumeController final {
   InputVolumeController(const InputVolumeController&) = delete;
   InputVolumeController& operator=(const InputVolumeController&) = delete;
 
-  // TODO(webrtc:7494): Integrate initialization into ctor and remove this
-  // method.
+  // TODO(webrtc:7494): Integrate initialization into ctor and remove.
   void Initialize();
 
   // Sets the applied input volume.
@@ -77,15 +83,15 @@ class InputVolumeController final {
   // TODO(bugs.webrtc.org/7494): Add argument for the applied input volume and
   // remove `set_stream_analog_level()`.
   // Analyzes `audio` before `Process()` is called so that the analysis can be
-  // performed before external digital processing operations take place (e.g.,
-  // echo cancellation). The analysis consists of input clipping detection and
+  // performed before digital processing operations take place (e.g., echo
+  // cancellation). The analysis consists of input clipping detection and
   // prediction (if enabled). Must be called after `set_stream_analog_level()`.
   void AnalyzePreProcess(const AudioBuffer& audio_buffer);
 
-  // Chooses a digital compression gain and the new input volume to recommend.
-  // Must be called after `AnalyzePreProcess()`. `speech_probability`
-  // (range [0.0f, 1.0f]) and `speech_level_dbfs` (range [-90.f, 30.0f]) are
-  // used to compute the RMS error.
+  // Adjusts the recommended input volume upwards/downwards based on
+  // `speech_level_dbfs`. Must be called after `AnalyzePreProcess()`. The value
+  // of `speech_probability` is expected to be in the range [0.0f, 1.0f] and
+  // `speech_level_dbfs` in the the range [-90.f, 30.0f].
   void Process(absl::optional<float> speech_probability,
                absl::optional<float> speech_level_dbfs);
 
@@ -97,22 +103,17 @@ class InputVolumeController final {
   // `AnalyzePreProcess()` and `Process()`.
   int recommended_analog_level() const { return recommended_input_volume_; }
 
-  // Call when the capture stream output has been flagged to be used/not-used.
-  // If unused, the manager  disregards all incoming audio.
+  // Stores whether the capture output will be used or not. Call when the
+  // capture stream output has been flagged to be used/not-used. If unused, the
+  // controller disregards all incoming audio.
   void HandleCaptureOutputUsedChange(bool capture_output_used);
 
-  float voice_probability() const;
-
-  int num_channels() const { return num_capture_channels_; }
-
-  // If available, returns the latest digital compression gain that has been
-  // chosen.
-  absl::optional<int> GetDigitalComressionGain();
-
   // Returns true if clipping prediction is enabled.
+  // TODO(bugs.webrtc.org/7494): Deprecate this method.
   bool clipping_predictor_enabled() const { return !!clipping_predictor_; }
 
   // Returns true if clipping prediction is used to adjust the input volume.
+  // TODO(bugs.webrtc.org/7494): Deprecate this method.
   bool use_clipping_predictor_step() const {
     return use_clipping_predictor_step_;
   }
@@ -120,8 +121,6 @@ class InputVolumeController final {
  private:
   friend class InputVolumeControllerTestHelper;
 
-  FRIEND_TEST_ALL_PREFIXES(InputVolumeControllerTest,
-                           DisableDigitalDisablesDigital);
   FRIEND_TEST_ALL_PREFIXES(InputVolumeControllerTest,
                            AgcMinMicLevelExperimentDefault);
   FRIEND_TEST_ALL_PREFIXES(InputVolumeControllerTest,
@@ -132,29 +131,19 @@ class InputVolumeController final {
                            AgcMinMicLevelExperimentOutOfRangeBelow);
   FRIEND_TEST_ALL_PREFIXES(InputVolumeControllerTest,
                            AgcMinMicLevelExperimentEnabled50);
-  FRIEND_TEST_ALL_PREFIXES(InputVolumeControllerTest,
-                           AgcMinMicLevelExperimentEnabledAboveStartupLevel);
   FRIEND_TEST_ALL_PREFIXES(InputVolumeControllerParametrizedTest,
                            ClippingParametersVerified);
-  FRIEND_TEST_ALL_PREFIXES(InputVolumeControllerParametrizedTest,
-                           DisableClippingPredictorDoesNotLowerVolume);
-  FRIEND_TEST_ALL_PREFIXES(InputVolumeControllerParametrizedTest,
-                           UsedClippingPredictionsProduceLowerAnalogLevels);
-  FRIEND_TEST_ALL_PREFIXES(InputVolumeControllerParametrizedTest,
-                           UnusedClippingPredictionsProduceEqualAnalogLevels);
-  FRIEND_TEST_ALL_PREFIXES(InputVolumeControllerParametrizedTest,
-                           EmptyRmsErrorHasNoEffect);
 
   void AggregateChannelLevels();
 
   const bool analog_controller_enabled_;
 
-  const absl::optional<int> min_mic_level_override_;
-  static std::atomic<int> instance_counter_;
-  const bool use_min_channel_level_;
   const int num_capture_channels_;
 
-  int frames_since_clipped_;
+  // If not empty, the value is used to override the minimum input volume.
+  const absl::optional<int> min_mic_level_override_;
+
+  const bool use_min_channel_level_;
 
   // TODO(bugs.webrtc.org/7494): Create a separate member for the applied input
   // volume.
@@ -167,18 +156,27 @@ class InputVolumeController final {
   int recommended_input_volume_ = 0;
 
   bool capture_output_used_;
-  int channel_controlling_gain_ = 0;
 
+  // Clipping detection and prediction.
   const int clipped_level_step_;
   const float clipped_ratio_threshold_;
   const int clipped_wait_frames_;
-
-  std::vector<std::unique_ptr<MonoInputVolumeController>> channel_controllers_;
-
   const std::unique_ptr<ClippingPredictor> clipping_predictor_;
   const bool use_clipping_predictor_step_;
-  float clipping_rate_log_;
+  int frames_since_clipped_;
   int clipping_rate_log_counter_;
+  float clipping_rate_log_;
+
+  // Target range minimum and maximum. If the seech level is in the range
+  // [`target_range_min_dbfs`, `target_range_max_dbfs`], no volume adjustments
+  // take place. Instead, the digital gain controller is assumed to adapt to
+  // compensate for the speech level RMS error.
+  const int target_range_max_dbfs_;
+  const int target_range_min_dbfs_;
+
+  // Channel controllers updating the gain upwards/downwards.
+  std::vector<std::unique_ptr<MonoInputVolumeController>> channel_controllers_;
+  int channel_controlling_gain_ = 0;
 };
 
 // TODO(bugs.webrtc.org/7494): Use applied/recommended input volume naming
@@ -187,8 +185,7 @@ class MonoInputVolumeController {
  public:
   MonoInputVolumeController(int startup_min_level,
                             int clipped_level_min,
-                            int min_mic_level,
-                            int max_digital_gain_db);
+                            int min_mic_level);
   ~MonoInputVolumeController();
   MonoInputVolumeController(const MonoInputVolumeController&) = delete;
   MonoInputVolumeController& operator=(const MonoInputVolumeController&) =
@@ -205,9 +202,10 @@ class MonoInputVolumeController {
   // `set_stream_analog_level()`.
   void HandleClipping(int clipped_level_step);
 
-  // Updates the recommended input volume based on the estimated speech level
-  // RMS error. Must be called after `HandleClipping()`.
-  void Process(absl::optional<int> rms_error);
+  // Adjusts the recommended input volume upwards/downwards depending on whether
+  // `rms_error_dbfs` is positive or negative. Must be called after
+  // `HandleClipping()`.
+  void Process(absl::optional<int> rms_error_dbfs);
 
   // Returns the recommended input volume. Must be called after `Process()`.
   int recommended_analog_level() const { return recommended_input_volume_; }
@@ -223,16 +221,18 @@ class MonoInputVolumeController {
   // by the user, in which case no action is taken.
   void SetLevel(int new_level);
 
-  // Set the maximum input volume the input volume controller is allowed to
-  // apply. The volume must be at least `kClippedLevelMin`.
+  // Sets the maximum input volume that the input volume controller is allowed
+  // to apply. The volume must be at least `kClippedLevelMin`.
   void SetMaxLevel(int level);
 
   int CheckVolumeAndReset();
-  void UpdateGain(int rms_error_db);
+
+  // Updates the recommended input volume. If the volume slider needs to be
+  // moved, we check first if the user has adjusted it, in which case we take no
+  // action and cache the updated level.
+  void UpdateInputVolume(int rms_error_dbfs);
 
   const int min_mic_level_;
-
-  const int max_digital_gain_db_;
 
   int level_ = 0;
   int max_level_;
@@ -254,7 +254,7 @@ class MonoInputVolumeController {
 
   const int clipped_level_min_;
 
-  // Frames since the last `UpdateGain()` call.
+  // Frames since the last `UpdateInputVolume()` call.
   int frames_since_update_gain_ = 0;
   bool is_first_frame_ = true;
 };

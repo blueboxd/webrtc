@@ -22,6 +22,7 @@
 #include "api/rtc_event_log_output_file.h"
 #include "api/scoped_refptr.h"
 #include "api/test/metrics/metric.h"
+#include "api/test/pclf/media_configuration.h"
 #include "api/test/time_controller.h"
 #include "api/test/video_quality_analyzer_interface.h"
 #include "pc/sdp_utils.h"
@@ -49,8 +50,6 @@ namespace {
 
 using ::webrtc::test::ImprovementDirection;
 using ::webrtc::test::Unit;
-using VideoConfig =
-    ::webrtc::webrtc_pc_e2e::PeerConnectionE2EQualityTestFixture::VideoConfig;
 
 constexpr TimeDelta kDefaultTimeout = TimeDelta::Seconds(10);
 constexpr char kSignalThreadName[] = "signaling_thread";
@@ -473,7 +472,8 @@ void PeerConnectionE2EQualityTest::OnTrackCallback(
   // track->kind() is kVideoKind.
   auto* video_track = static_cast<VideoTrackInterface*>(track.get());
   std::unique_ptr<rtc::VideoSinkInterface<VideoFrame>> video_sink =
-      video_quality_analyzer_injection_helper_->CreateVideoSink(peer_name);
+      video_quality_analyzer_injection_helper_->CreateVideoSink(
+          peer_name, peer_subscription, /*report_infra_stats=*/false);
   video_track->AddOrUpdateSink(video_sink.get(), rtc::VideoSinkWants());
   output_video_sinks_.push_back(std::move(video_sink));
 }
