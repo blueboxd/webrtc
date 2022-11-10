@@ -10,11 +10,10 @@
 
 package org.webrtc;
 
-import static org.junit.Assert.assertEquals;
+import static com.google.common.truth.Truth.assertThat;
 
 import androidx.annotation.Nullable;
 import androidx.test.filters.SmallTest;
-import java.util.ArrayList;
 import java.util.HashMap;
 import org.junit.Before;
 import org.junit.Test;
@@ -31,12 +30,33 @@ public class SoftwareVideoDecoderFactoryTest {
   public void getSupportedCodecs_returnsDefaultCodecs() {
     VideoDecoderFactory factory = new SoftwareVideoDecoderFactory();
     VideoCodecInfo[] codecs = factory.getSupportedCodecs();
-    assertEquals(6, codecs.length);
-    assertEquals("VP8", codecs[0].name);
-    assertEquals("VP9", codecs[1].name);
-    assertEquals("VP9", codecs[2].name);
-    assertEquals("VP9", codecs[3].name);
-    assertEquals("AV1", codecs[4].name);
-    assertEquals("AV1", codecs[5].name);
+    assertThat(codecs.length).isEqualTo(6);
+    assertThat(codecs[0].name).isEqualTo("VP8");
+    assertThat(codecs[1].name).isEqualTo("VP9");
+    assertThat(codecs[2].name).isEqualTo("VP9");
+    assertThat(codecs[3].name).isEqualTo("VP9");
+    assertThat(codecs[4].name).isEqualTo("AV1");
+    assertThat(codecs[5].name).isEqualTo("AV1");
+  }
+
+  @SmallTest
+  @Test
+  public void createDecoder_supportedCodec_returnsNotNull() {
+    VideoDecoderFactory factory = new SoftwareVideoDecoderFactory();
+    VideoCodecInfo[] codecs = factory.getSupportedCodecs();
+    assertThat(codecs.length).isGreaterThan(0);
+    for (VideoCodecInfo codec : codecs) {
+      VideoDecoder decoder = factory.createDecoder(codec);
+      assertThat(decoder).isNotNull();
+    }
+  }
+
+  @SmallTest
+  @Test
+  public void createDecoder_unsupportedCodec_returnsNull() {
+    VideoDecoderFactory factory = new SoftwareVideoDecoderFactory();
+    VideoCodecInfo codec = new VideoCodecInfo("unsupported", new HashMap<String, String>());
+    VideoDecoder decoder = factory.createDecoder(codec);
+    assertThat(decoder).isNull();
   }
 }

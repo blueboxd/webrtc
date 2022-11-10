@@ -56,12 +56,6 @@ Agc1ClippingPredictorConfig CreateClippingPredictorConfig(bool enabled) {
   return config;
 }
 
-// Returns whether a fall-back solution to choose the maximum level should be
-// chosen.
-bool UseMaxAnalogChannelLevel() {
-  return field_trial::IsEnabled("WebRTC-UseMaxAnalogAgcChannelLevel");
-}
-
 // If the "WebRTC-Audio-2ndAgcMinMicLevelExperiment" field trial is specified,
 // parses it and returns a value between 0 and 255 depending on the field-trial
 // string. Returns an unspecified value if the field trial is not specified, if
@@ -84,10 +78,6 @@ absl::optional<int> GetMinMicLevelOverride() {
                         << kMinMicLevelFieldTrial << ", ignored.";
     return absl::nullopt;
   }
-}
-
-int ClampLevel(int mic_level, int min_mic_level) {
-  return rtc::SafeClamp(mic_level, min_mic_level, kMaxMicLevel);
 }
 
 int LevelFromGainError(int gain_error, int level, int min_mic_level) {
@@ -178,12 +168,10 @@ int GetSpeechLevelErrorDb(float speech_level_dbfs,
 
 }  // namespace
 
-MonoInputVolumeController::MonoInputVolumeController(int startup_min_level,
-                                                     int clipped_level_min,
+MonoInputVolumeController::MonoInputVolumeController(int clipped_level_min,
                                                      int min_mic_level)
     : min_mic_level_(min_mic_level),
       max_level_(kMaxMicLevel),
-      startup_min_level_(ClampLevel(startup_min_level, min_mic_level_)),
       clipped_level_min_(clipped_level_min) {}
 
 MonoInputVolumeController::~MonoInputVolumeController() = default;
@@ -316,9 +304,8 @@ int MonoInputVolumeController::CheckVolumeAndReset() {
   }
   RTC_DLOG(LS_INFO) << "[agc] Initial GetMicVolume()=" << level;
 
-  int minLevel = startup_ ? startup_min_level_ : min_mic_level_;
-  if (level < minLevel) {
-    level = minLevel;
+  if (level < min_mic_level_) {
+    level = min_mic_level_;
     RTC_DLOG(LS_INFO) << "[agc] Initial volume too low, raising to " << level;
     recommended_input_volume_ = level;
   }
@@ -354,7 +341,6 @@ InputVolumeController::InputVolumeController(int num_capture_channels,
     : analog_controller_enabled_(config.enabled),
       num_capture_channels_(num_capture_channels),
       min_mic_level_override_(GetMinMicLevelOverride()),
-      use_min_channel_level_(!UseMaxAnalogChannelLevel()),
       capture_output_used_(true),
       clipped_level_step_(config.clipped_level_step),
       clipped_ratio_threshold_(config.clipped_ratio_threshold),
@@ -379,11 +365,10 @@ InputVolumeController::InputVolumeController(int num_capture_channels,
                    << " (overridden: "
                    << (min_mic_level_override_.has_value() ? "yes" : "no")
                    << ")";
-  RTC_LOG(LS_INFO) << "[agc] Startup min volume: " << config.startup_min_volume;
 
   for (auto& controller : channel_controllers_) {
     controller = std::make_unique<MonoInputVolumeController>(
-        config.startup_min_volume, config.clipped_level_min, min_mic_level);
+        config.clipped_level_min, min_mic_level);
   }
 
   RTC_DCHECK(!channel_controllers_.empty());
@@ -455,7 +440,7 @@ void InputVolumeController::AnalyzePreProcess(const AudioBuffer& audio_buffer) {
     for (int channel = 0; channel < num_capture_channels_; ++channel) {
       const auto step = clipping_predictor_->EstimateClippedLevelStep(
           channel, recommended_input_volume_, clipped_level_step_,
-          channel_controllers_[channel]->min_mic_level(), kMaxMicLevel);
+          channel_controllers_[channel]->clipped_level_min(), kMaxMicLevel);
       if (step.has_value()) {
         predicted_step = std::max(predicted_step, step.value());
         clipping_predicted = true;
@@ -533,21 +518,11 @@ void InputVolumeController::AggregateChannelLevels() {
   int new_recommended_input_volume =
       channel_controllers_[0]->recommended_analog_level();
   channel_controlling_gain_ = 0;
-  if (use_min_channel_level_) {
-    for (size_t ch = 1; ch < channel_controllers_.size(); ++ch) {
-      int level = channel_controllers_[ch]->recommended_analog_level();
-      if (level < new_recommended_input_volume) {
-        new_recommended_input_volume = level;
-        channel_controlling_gain_ = static_cast<int>(ch);
-      }
-    }
-  } else {
-    for (size_t ch = 1; ch < channel_controllers_.size(); ++ch) {
-      int level = channel_controllers_[ch]->recommended_analog_level();
-      if (level > new_recommended_input_volume) {
-        new_recommended_input_volume = level;
-        channel_controlling_gain_ = static_cast<int>(ch);
-      }
+  for (size_t ch = 1; ch < channel_controllers_.size(); ++ch) {
+    int level = channel_controllers_[ch]->recommended_analog_level();
+    if (level < new_recommended_input_volume) {
+      new_recommended_input_volume = level;
+      channel_controlling_gain_ = static_cast<int>(ch);
     }
   }
 

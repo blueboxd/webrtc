@@ -32,8 +32,11 @@ static jlong JNI_SoftwareVideoEncoderFactory_CreateEncoder(
   const auto video_format =
       webrtc::jni::VideoCodecInfoToSdpVideoFormat(env, j_video_codec_info);
 
-  return webrtc::NativeToJavaPointer(
-      native_factory->CreateVideoEncoder(video_format).release());
+  auto encoder = native_factory->CreateVideoEncoder(video_format);
+  if (encoder == nullptr) {
+    return 0;
+  }
+  return webrtc::NativeToJavaPointer(encoder.release());
 }
 
 static webrtc::ScopedJavaLocalRef<jobject>

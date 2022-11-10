@@ -45,7 +45,6 @@ namespace webrtc_pc_e2e {
 class PeerConnectionE2EQualityTest
     : public PeerConnectionE2EQualityTestFixture {
  public:
-  using PeerConfigurer = PeerConnectionE2EQualityTestFixture::PeerConfigurer;
   using QualityMetricsReporter =
       PeerConnectionE2EQualityTestFixture::QualityMetricsReporter;
 
@@ -75,6 +74,7 @@ class PeerConnectionE2EQualityTest
   PeerHandle* AddPeer(
       const PeerNetworkDependencies& network_dependencies,
       rtc::FunctionView<void(PeerConfigurer*)> configurer) override;
+  PeerHandle* AddPeer(std::unique_ptr<PeerConfigurer> configurer) override;
   void Run(RunParams run_params) override;
 
   TimeDelta GetRealTestDuration() const override {
@@ -124,7 +124,7 @@ class PeerConnectionE2EQualityTest
   std::unique_ptr<TestActivitiesExecutor> executor_;
   test::MetricsLogger* const metrics_logger_;
 
-  std::vector<std::unique_ptr<PeerConfigurerImpl>> peer_configurations_;
+  std::vector<std::unique_ptr<PeerConfigurer>> peer_configurations_;
   std::vector<PeerHandleImpl> peer_handles_;
 
   std::unique_ptr<TestPeer> alice_;

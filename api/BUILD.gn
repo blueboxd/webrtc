@@ -539,6 +539,7 @@ rtc_source_set("peer_connection_quality_test_fixture_api") {
     "task_queue",
     "test/pclf:media_configuration",
     "test/pclf:media_quality_test_params",
+    "test/pclf:peer_configurer",
     "test/video:video_frame_writer",
     "transport:network_control",
     "units:time_delta",
@@ -546,6 +547,7 @@ rtc_source_set("peer_connection_quality_test_fixture_api") {
     "video_codecs:video_codecs_api",
   ]
   absl_deps = [
+    "//third_party/abseil-cpp/absl/base:core_headers",
     "//third_party/abseil-cpp/absl/memory",
     "//third_party/abseil-cpp/absl/strings",
     "//third_party/abseil-cpp/absl/types:optional",
