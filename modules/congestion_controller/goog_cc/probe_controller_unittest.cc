@@ -796,15 +796,12 @@ TEST(ProbeControllerTest,
       "network_state_interval:5s,limit_probe_target_rate_to_loss_bwe:true/");
   std::unique_ptr<ProbeController> probe_controller =
       fixture.CreateController();
-
   auto probes = probe_controller->SetBitrates(
       kMinBitrate, kStartBitrate, kMaxBitrate, fixture.CurrentTime());
   ASSERT_FALSE(probes.empty());
-
   NetworkStateEstimate state_estimate;
   state_estimate.link_capacity_upper = 1.2 * probes[0].target_data_rate / 2;
   probe_controller->SetNetworkStateEstimate(state_estimate);
-
   // No immediate further probing since probe result is low.
   probes = probe_controller->SetEstimatedBitrate(
       probes[0].target_data_rate / 2, /*bwe_limited_due_to_packet_loss=*/false,
@@ -823,6 +820,12 @@ TEST(ProbeControllerTest,
       probes[0].target_data_rate, /*bwe_limited_due_to_packet_loss=*/false,
       fixture.CurrentTime());
   EXPECT_FALSE(probes.empty());
+
+  // But no more probes if estimate is close to the link capacity.
+  probes = probe_controller->SetEstimatedBitrate(
+      state_estimate.link_capacity_upper * 0.9,
+      /*bwe_limited_due_to_packet_loss=*/false, fixture.CurrentTime());
+  EXPECT_TRUE(probes.empty());
 }
 
 TEST(ProbeControllerTest, SkipAlrProbeIfEstimateLargerThanMaxProbe) {

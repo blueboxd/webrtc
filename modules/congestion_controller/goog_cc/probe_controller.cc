@@ -298,21 +298,27 @@ std::vector<ProbeClusterConfig> ProbeController::SetEstimatedBitrate(
                                bitrate.kbps());
     mid_call_probing_waiting_for_result_ = false;
   }
-  std::vector<ProbeClusterConfig> pending_probes;
   if (state_ == State::kWaitingForProbingResult) {
     // Continue probing if probing results indicate channel has greater
     // capacity.
+    DataRate network_state_estimate_probe_further_limit =
+        config_.network_state_estimate_probing_interval->IsFinite() &&
+                network_estimate_
+            ? network_estimate_->link_capacity_upper *
+                  config_.further_probe_threshold
+            : DataRate::PlusInfinity();
     RTC_LOG(LS_INFO) << "Measured bitrate: " << bitrate
                      << " Minimum to probe further: "
-                     << min_bitrate_to_probe_further_;
+                     << min_bitrate_to_probe_further_ << " upper limit: "
+                     << network_state_estimate_probe_further_limit;
 
-    if (bitrate > min_bitrate_to_probe_further_) {
-      pending_probes = InitiateProbing(
+    if (bitrate > min_bitrate_to_probe_further_ &&
+        bitrate <= network_state_estimate_probe_further_limit) {
+      return InitiateProbing(
           at_time, {config_.further_exponential_probe_scale * bitrate}, true);
     }
   }
-
-  return pending_probes;
+  return {};
 }
 
 void ProbeController::EnablePeriodicAlrProbing(bool enable) {
@@ -532,6 +538,8 @@ std::vector<ProbeClusterConfig> ProbeController::InitiateProbing(
   time_last_probing_initiated_ = now;
   if (probe_further) {
     state_ = State::kWaitingForProbingResult;
+    // Dont expect probe results to be larger than a fraction of the actual
+    // probe rate.
     min_bitrate_to_probe_further_ =
         std::min(estimate_capped_bitrate, (*(bitrates_to_probe.end() - 1))) *
         config_.further_probe_threshold;
