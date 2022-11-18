@@ -11,20 +11,20 @@
     'name': 'client.webrtc',
     'mixins': [],
     'machines': {
-      'Android32 (M Nexus5X)': {
+      'Android32': {
         'mixins': [
-          'bullhead', 'marshmallow', 'android-devices', 'logdog-butler',
-          'has_native_resultdb_integration'
+          'walleye', 'android-devices', 'has_native_resultdb_integration',
+          'chromium-tester-service-account'
         ],
         'test_suites': {
           'gtest_tests': 'android_tests',
           'junit_tests': 'android_junit_tests',
         },
       },
-      'Android32 (M Nexus5X)(dbg)': {
+      'Android32 (dbg)': {
         'mixins': [
-          'bullhead', 'marshmallow', 'android-devices', 'logdog-butler',
-          'has_native_resultdb_integration'
+          'walleye', 'android-devices', 'has_native_resultdb_integration',
+          'chromium-tester-service-account'
         ],
         'test_suites': {
           'gtest_tests': 'android_tests',
@@ -33,8 +33,8 @@
       },
       'Android32 (more configs)': {
         'mixins': [
-          'bullhead', 'marshmallow', 'android-devices', 'logdog-butler',
-          'has_native_resultdb_integration'
+          'walleye', 'android-devices', 'has_native_resultdb_integration',
+          'chromium-tester-service-account'
         ],
         'test_suites': {
           'gtest_tests': 'more_configs_tests',
@@ -43,20 +43,20 @@
       'Android32 Builder arm': {},
       'Android32 Builder x86': {},
       'Android32 Builder x86 (dbg)': {},
-      'Android64 (M Nexus5X)': {
+      'Android64': {
         'mixins': [
-          'bullhead', 'marshmallow', 'android-devices', 'logdog-butler',
-          'has_native_resultdb_integration'
+          'walleye', 'android-devices', 'has_native_resultdb_integration',
+          'chromium-tester-service-account'
         ],
         'test_suites': {
           'gtest_tests': 'android_tests',
           'junit_tests': 'android_junit_tests',
         },
       },
-      'Android64 (M Nexus5X)(dbg)': {
+      'Android64 (dbg)': {
         'mixins': [
-          'bullhead', 'marshmallow', 'android-devices', 'logdog-butler',
-          'has_native_resultdb_integration'
+          'walleye', 'android-devices', 'has_native_resultdb_integration',
+          'chromium-tester-service-account'
         ],
         'test_suites': {
           'gtest_tests': 'android_tests',
@@ -253,7 +253,8 @@
       'Perf Android32 (M AOSP Nexus6)': {
         'mixins': [
           'shamu', 'marshmallow_generic', 'android-devices', 'perf-pool',
-          'perf-output', 'timeout-3h', 'has_native_resultdb_integration'
+          'perf-output', 'timeout-3h', 'has_native_resultdb_integration',
+          'chromium-tester-service-account'
         ],
         'test_suites': {
           'gtest_tests': 'android_perf_tests',
@@ -262,7 +263,8 @@
       'Perf Android32 (M Nexus5)': {
         'mixins': [
           'hammerhead', 'marshmallow_generic', 'android-devices', 'perf-pool',
-          'perf-output', 'timeout-3h', 'has_native_resultdb_integration'
+          'perf-output', 'timeout-3h', 'has_native_resultdb_integration',
+          'chromium-tester-service-account'
         ],
         'test_suites': {
           'gtest_tests': 'android_perf_tests',
@@ -271,7 +273,8 @@
       'Perf Android32 (O Pixel2)': {
         'mixins': [
           'walleye', 'android-devices', 'perf-pool', 'timeout-3h',
-          'perf-output', 'has_native_resultdb_integration'
+          'perf-output', 'has_native_resultdb_integration',
+          'chromium-tester-service-account'
         ],
         'test_suites': {
           'gtest_tests': 'android_perf_tests',
@@ -280,7 +283,8 @@
       'Perf Android32 (R Pixel5)': {
         'mixins': [
           'redfin', 'android-devices', 'perf-pool', 'timeout-3h',
-          'perf-output', 'has_native_resultdb_integration'
+          'perf-output', 'has_native_resultdb_integration',
+          'chromium-tester-service-account'
         ],
         'test_suites': {
           'gtest_tests': 'android_perf_tests',
@@ -289,7 +293,8 @@
       'Perf Android64 (M Nexus5X)': {
         'mixins': [
           'bullhead', 'marshmallow', 'android-devices', 'perf-pool',
-          'perf-output', 'timeout-3h', 'has_native_resultdb_integration'
+          'perf-output', 'timeout-3h', 'has_native_resultdb_integration',
+          'chromium-tester-service-account'
         ],
         'test_suites': {
           'gtest_tests': 'android_perf_tests',
@@ -298,7 +303,8 @@
       'Perf Android64 (O Pixel2)': {
         'mixins': [
           'walleye', 'android-devices', 'perf-pool', 'timeout-3h',
-          'perf-output', 'has_native_resultdb_integration'
+          'perf-output', 'has_native_resultdb_integration',
+          'chromium-tester-service-account'
         ],
         'test_suites': {
           'gtest_tests': 'android_perf_tests',
@@ -307,7 +313,8 @@
       'Perf Android64 (R Pixel5)': {
         'mixins': [
           'redfin', 'android-devices', 'perf-pool', 'timeout-3h',
-          'perf-output', 'has_native_resultdb_integration'
+          'perf-output', 'has_native_resultdb_integration',
+          'chromium-tester-service-account'
         ],
         'test_suites': {
           'gtest_tests': 'android_perf_tests',
@@ -402,8 +409,8 @@
     'machines': {
       'android_arm64_dbg': {
         'mixins': [
-          'bullhead', 'marshmallow', 'android-devices', 'logdog-butler',
-          'has_native_resultdb_integration'
+          'walleye', 'android-devices', 'has_native_resultdb_integration',
+          'chromium-tester-service-account'
         ],
         'test_suites': {
           'gtest_tests': 'android_tests_tryserver',
@@ -412,8 +419,8 @@
       },
       'android_arm64_rel': {
         'mixins': [
-          'bullhead', 'marshmallow', 'android-devices', 'logdog-butler',
-          'has_native_resultdb_integration'
+          'walleye', 'android-devices', 'has_native_resultdb_integration',
+          'chromium-tester-service-account'
         ],
         'test_suites': {
           'gtest_tests': 'android_tests_tryserver',
@@ -422,8 +429,8 @@
       },
       'android_arm_dbg': {
         'mixins': [
-          'bullhead', 'marshmallow', 'android-devices', 'logdog-butler',
-          'has_native_resultdb_integration'
+          'walleye', 'android-devices', 'has_native_resultdb_integration',
+          'chromium-tester-service-account'
         ],
         'test_suites': {
           'gtest_tests': 'android_tests_tryserver',
@@ -432,8 +439,8 @@
       },
       'android_arm_more_configs': {
         'mixins': [
-          'bullhead', 'marshmallow', 'android-devices', 'logdog-butler',
-          'has_native_resultdb_integration'
+          'walleye', 'android-devices', 'has_native_resultdb_integration',
+          'chromium-tester-service-account'
         ],
         'test_suites': {
           'gtest_tests': 'more_configs_tests',
@@ -441,8 +448,8 @@
       },
       'android_arm_rel': {
         'mixins': [
-          'bullhead', 'marshmallow', 'android-devices', 'logdog-butler',
-          'has_native_resultdb_integration'
+          'walleye', 'android-devices', 'has_native_resultdb_integration',
+          'chromium-tester-service-account'
         ],
         'test_suites': {
           'gtest_tests': 'android_tests_tryserver',
