@@ -628,9 +628,13 @@ def perf_builder(name, perf_cat, **kwargs):
     properties = make_goma_properties()
     properties.update(make_reclient_properties("rbe-webrtc-trusted"))
     properties["builder_group"] = "client.webrtc.perf"
+    dimensions = {"pool": "luci.webrtc.perf", "os": "Linux", "cores": "2"}
+    if "Android" in name:
+        # Android perf testers require more performant bots to finish under 3 hours.
+        dimensions["cores"] = "8"
     return webrtc_builder(
         name = name,
-        dimensions = {"pool": "luci.webrtc.perf", "os": "Linux"},
+        dimensions = dimensions,
         properties = properties,
         bucket = "perf",
         service_account = "webrtc-ci-builder@chops-service-accounts.iam.gserviceaccount.com",
@@ -783,8 +787,10 @@ linux_builder("Linux (more configs)", "Linux|x64|more")
 linux_try_job("linux_more_configs")
 linux_try_job("linux_chromium_compile", recipe = "chromium_trybot", branch_cq = False)
 linux_try_job("linux_chromium_compile_dbg", recipe = "chromium_trybot", branch_cq = False)
+linux_builder("Fuchsia Builder", ci_cat = None, perf_cat = "Fuchsia|x64|Builder|", prioritized = True)
 linux_builder("Fuchsia Release", "Fuchsia|x64|rel")
 linux_try_job("fuchsia_rel", cq = None)
+perf_builder("Perf Fuchsia", "Fuchsia|x64|Tester|", triggered_by = ["Fuchsia Builder"])
 
 mac_builder("Mac64 Debug", "Mac|x64|dbg")
 mac_try_job("mac_dbg", cq = None)
@@ -794,7 +800,7 @@ mac_builder("Mac64 Release", "Mac|x64|rel")
 mac_try_job("mac_rel")
 mac_try_job("mac_compile_rel", cq = None)
 mac_builder("Mac64 Builder", ci_cat = None, perf_cat = "Mac|x64|Builder|")
-mac_builder("MacArm64 Builder", ci_cat = None, perf_cat = "Mac|arm64|Builder")
+mac_builder("MacArm64 Builder", ci_cat = None, perf_cat = "Mac|arm64|Builder|")
 perf_builder("Perf Mac 11", "Mac|x64|Tester|11", triggered_by = ["Mac64 Builder"])
 perf_builder("Perf Mac M1 Arm64 12", "Mac|arm64|Tester|12", triggered_by = ["MacArm64 Builder"])
 
@@ -811,8 +817,8 @@ win_try_job("win_compile_x86_clang_dbg")
 win_builder("Win32 Release (Clang)", "Win Clang|x86|rel")
 win_try_job("win_x86_clang_rel")
 win_try_job("win_compile_x86_clang_rel", cq = None)
-win_builder("Win32 Builder (Clang)", ci_cat = None, perf_cat = "Win|x86|Builder|")
-perf_builder("Perf Win7", "Win|x86|Tester|7", triggered_by = ["Win32 Builder (Clang)"])
+win_builder("Win64 Builder (Clang)", ci_cat = None, perf_cat = "Win|x64|Builder|")
+perf_builder("Perf Win 10", "Win|x64|Tester|10", triggered_by = ["Win64 Builder (Clang)"])
 win_builder("Win64 Debug (Clang)", "Win Clang|x64|dbg")
 win_try_job("win_x64_clang_dbg", cq = None)
 win_try_job("win_x64_clang_dbg_win10", cq = None)

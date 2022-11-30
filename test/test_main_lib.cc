@@ -22,6 +22,7 @@
 #include "api/test/metrics/chrome_perf_dashboard_metrics_exporter.h"
 #include "api/test/metrics/global_metrics_logger_and_exporter.h"
 #include "api/test/metrics/metrics_exporter.h"
+#include "api/test/metrics/metrics_set_proto_file_exporter.h"
 #include "api/test/metrics/print_result_proxy_metrics_exporter.h"
 #include "api/test/metrics/stdout_metrics_exporter.h"
 #include "rtc_base/checks.h"
@@ -85,18 +86,7 @@ ABSL_FLAG(std::string,
           "",
           "Path to output an empty JSON file which Chromium infra requires.");
 
-ABSL_FLAG(bool,
-          export_perf_results_new_api,
-          false,
-          "Tells to initialize new API for exporting performance metrics");
-
-// TODO(crbug.com/1384172): Re-enable logs by default once the issue with
-// logcat is solved.
-#if defined(WEBRTC_ANDROID)
-ABSL_FLAG(bool, logs, false, "print logs to stderr");
-#else
 ABSL_FLAG(bool, logs, true, "print logs to stderr");
-#endif
 ABSL_FLAG(bool, verbose, false, "verbose logs to stderr");
 
 ABSL_FLAG(std::string,
@@ -104,6 +94,17 @@ ABSL_FLAG(std::string,
           "",
           "Path to collect trace events (json file) for chrome://tracing. "
           "If not set, events aren't captured.");
+
+ABSL_FLAG(std::string,
+          test_launcher_shard_index,
+          "",
+          "Index of the test shard to run, from 0 to "
+          "the value specified with --test_launcher_total_shards.");
+
+ABSL_FLAG(std::string,
+          test_launcher_total_shards,
+          "",
+          "Total number of shards.");
 
 namespace webrtc {
 
@@ -131,6 +132,19 @@ class TestMainImpl : public TestMain {
 
     rtc::LogMessage::SetLogToStderr(absl::GetFlag(FLAGS_logs) ||
                                     absl::GetFlag(FLAGS_verbose));
+
+    // The sharding arguments take precedence over the sharding environment
+    // variables.
+    if (!absl::GetFlag(FLAGS_test_launcher_shard_index).empty() &&
+        !absl::GetFlag(FLAGS_test_launcher_total_shards).empty()) {
+      std::string shard_index =
+          "GTEST_SHARD_INDEX=" + absl::GetFlag(FLAGS_test_launcher_shard_index);
+      std::string total_shards =
+          "GTEST_TOTAL_SHARDS=" +
+          absl::GetFlag(FLAGS_test_launcher_total_shards);
+      putenv(shard_index.data());
+      putenv(total_shards.data());
+    }
 
     // InitFieldTrialsFromString stores the char*, so the char array must
     // outlive the application.
@@ -182,6 +196,12 @@ class TestMainImpl : public TestMain {
     std::vector<std::unique_ptr<test::MetricsExporter>> exporters;
     if (absl::GetFlag(FLAGS_export_perf_results_new_api)) {
       exporters.push_back(std::make_unique<test::StdoutMetricsExporter>());
+      if (!absl::GetFlag(FLAGS_webrtc_test_metrics_output_path).empty()) {
+        exporters.push_back(
+            std::make_unique<webrtc::test::MetricsSetProtoFileExporter>(
+                webrtc::test::MetricsSetProtoFileExporter::Options(
+                    absl::GetFlag(FLAGS_webrtc_test_metrics_output_path))));
+      }
       if (!absl::GetFlag(FLAGS_isolated_script_test_perf_output).empty()) {
         exporters.push_back(
             std::make_unique<test::ChromePerfDashboardMetricsExporter>(

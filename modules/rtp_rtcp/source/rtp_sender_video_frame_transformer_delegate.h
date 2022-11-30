@@ -74,6 +74,8 @@ class RTPSenderVideoFrameTransformerDelegate : public TransformedFrameCallback {
   ~RTPSenderVideoFrameTransformerDelegate() override = default;
 
  private:
+  void EnsureEncoderQueueCreated();
+
   mutable Mutex sender_lock_;
   RTPSenderVideo* sender_ RTC_GUARDED_BY(sender_lock_);
   rtc::scoped_refptr<FrameTransformerInterface> frame_transformer_;
@@ -84,6 +86,10 @@ class RTPSenderVideoFrameTransformerDelegate : public TransformedFrameCallback {
   // happen if a hardware encoder was used.
   std::unique_ptr<TaskQueueBase, TaskQueueDeleter> owned_encoder_queue_;
 };
+
+// Method to support cloning a Sender frame from another frame
+std::unique_ptr<TransformableVideoFrameInterface> CloneSenderVideoFrame(
+    TransformableVideoFrameInterface* original);
 
 }  // namespace webrtc
 

@@ -18,6 +18,7 @@
 #include "modules/rtp_rtcp/source/rtp_descriptor_authentication.h"
 #include "modules/rtp_rtcp/source/rtp_sender_video.h"
 #include "rtc_base/checks.h"
+#include "rtc_base/logging.h"
 
 namespace webrtc {
 namespace {
@@ -34,7 +35,7 @@ class TransformableVideoSenderFrame : public TransformableVideoFrameInterface {
       uint32_t ssrc)
       : encoded_data_(encoded_image.GetEncodedData()),
         header_(video_header),
-        metadata_(header_),
+        metadata_(header_.GetAsMetadata()),
         frame_type_(encoded_image._frameType),
         payload_type_(payload_type),
         codec_type_(codec_type),
@@ -112,14 +113,9 @@ void RTPSenderVideoFrameTransformerDelegate::Init() {
       rtc::scoped_refptr<TransformedFrameCallback>(this), ssrc_);
 }
 
-bool RTPSenderVideoFrameTransformerDelegate::TransformFrame(
-    int payload_type,
-    absl::optional<VideoCodecType> codec_type,
-    uint32_t rtp_timestamp,
-    const EncodedImage& encoded_image,
-    RTPVideoHeader video_header,
-    absl::optional<int64_t> expected_retransmission_time_ms) {
+void RTPSenderVideoFrameTransformerDelegate::EnsureEncoderQueueCreated() {
   TaskQueueBase* current = TaskQueueBase::Current();
+
   if (!encoder_queue_) {
     // Save the current task queue to post the transformed frame for sending
     // once it is transformed. When there is no current task queue, i.e.
@@ -133,6 +129,18 @@ bool RTPSenderVideoFrameTransformerDelegate::TransformFrame(
       encoder_queue_ = owned_encoder_queue_.get();
     }
   }
+}
+
+bool RTPSenderVideoFrameTransformerDelegate::TransformFrame(
+    int payload_type,
+    absl::optional<VideoCodecType> codec_type,
+    uint32_t rtp_timestamp,
+    const EncodedImage& encoded_image,
+    RTPVideoHeader video_header,
+    absl::optional<int64_t> expected_retransmission_time_ms) {
+  EnsureEncoderQueueCreated();
+
+  TaskQueueBase* current = TaskQueueBase::Current();
   // DCHECK that the current queue does not change, or if does then it was due
   // to a hardware encoder fallback and thus there is an owned queue.
   RTC_DCHECK(!current || current == encoder_queue_ || owned_encoder_queue_)
@@ -152,11 +160,11 @@ void RTPSenderVideoFrameTransformerDelegate::OnTransformedFrame(
     std::unique_ptr<TransformableFrameInterface> frame) {
   MutexLock lock(&sender_lock_);
 
-  // The encoder queue normally gets destroyed after the sender;
-  // however, it might still be null by the time a previously queued frame
-  // arrives.
-  if (!sender_ || !encoder_queue_)
+  EnsureEncoderQueueCreated();
+
+  if (!sender_) {
     return;
+  }
   rtc::scoped_refptr<RTPSenderVideoFrameTransformerDelegate> delegate(this);
   encoder_queue_->PostTask(
       [delegate = std::move(delegate), frame = std::move(frame)]() mutable {
@@ -206,4 +214,37 @@ void RTPSenderVideoFrameTransformerDelegate::Reset() {
     sender_ = nullptr;
   }
 }
+
+std::unique_ptr<TransformableVideoFrameInterface> CloneSenderVideoFrame(
+    TransformableVideoFrameInterface* original) {
+  auto encoded_image_buffer = EncodedImageBuffer::Create(
+      original->GetData().data(), original->GetData().size());
+  EncodedImage encoded_image;
+  encoded_image.SetEncodedData(encoded_image_buffer);
+  RTPVideoHeader new_header;
+  absl::optional<VideoCodecType> new_codec_type;
+  // TODO(bugs.webrtc.org/14708): Figure out a way to get the header information
+  // without casting to TransformableVideoSenderFrame.
+  if (original->GetDirection() ==
+      TransformableFrameInterface::Direction::kSender) {
+    // TODO(bugs.webrtc.org/14708): Figure out a way to bulletproof this cast.
+    auto original_as_sender =
+        static_cast<TransformableVideoSenderFrame*>(original);
+    new_header = original_as_sender->GetHeader();
+    new_codec_type = original_as_sender->GetCodecType();
+  } else {
+    // TODO(bugs.webrtc.org/14708): Make this codec dependent
+    new_header.video_type_header.emplace<RTPVideoHeaderVP8>();
+    new_codec_type = kVideoCodecVP8;
+    // TODO(bugs.webrtc.org/14708): Fill in the new_header when it's not
+    // `Direction::kSender`
+  }
+  // TODO(bugs.webrtc.org/14708): Fill in other EncodedImage parameters
+  return std::make_unique<TransformableVideoSenderFrame>(
+      encoded_image, new_header, original->GetPayloadType(), new_codec_type,
+      original->GetTimestamp(),
+      absl::nullopt,  // expected_retransmission_time_ms
+      original->GetSsrc());
+}
+
 }  // namespace webrtc
