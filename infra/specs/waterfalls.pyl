@@ -199,9 +199,9 @@
       'Win32 Debug (Clang)': {},
       'Win32 Release (Clang)': {
         'os_type': 'win',
-        'mixins': ['win10-any', 'x86-64', 'resultdb-json-format'],
+        'mixins': ['win10', 'x86-64', 'resultdb-json-format'],
         'test_suites': {
-          'isolated_scripts': 'desktop_tests_with_video_capture',
+          'isolated_scripts': 'desktop_tests',
         },
       },
       'Win64 ASan': {
@@ -211,8 +211,20 @@
           'isolated_scripts': 'desktop_tests',
         },
       },
-      'Win64 Debug (Clang)': {},
-      'Win64 Release (Clang)': {},
+      'Win64 Debug (Clang)': {
+        'os_type': 'win',
+        'mixins': ['win10', 'x86-64', 'resultdb-json-format'],
+        'test_suites': {
+          'isolated_scripts': 'desktop_tests',
+        },
+      },
+      'Win64 Release (Clang)': {
+        'os_type': 'win',
+        'mixins': ['win10-any', 'x86-64', 'resultdb-json-format'],
+        'test_suites': {
+          'isolated_scripts': 'desktop_tests_with_video_capture',
+        },
+      },
       'iOS64 Debug': {},
       'iOS64 Release': {},
       'iOS64 Sim Debug (iOS 12)': {
@@ -328,9 +340,10 @@
           'linux-bionic', 'x86-64', 'perf-pool', 'timeout-3h', 'perf-output',
           'has_native_resultdb_integration', 'chromium-tester-service-account'
         ],
-        'test_suites': {
-          'isolated_scripts': 'desktop_perf_tests',
-        }
+        # TODO(b/232740856): Reenable when Fuchsia has it's own bot to run perf tests.
+        # 'test_suites': {
+        #   'isolated_scripts': 'desktop_perf_tests',
+        # }
       },
       'Perf Linux Bionic': {
         'os_type':
@@ -657,13 +670,6 @@
       'win_compile_x86_clang_dbg': {},
       'win_compile_x86_clang_rel': {},
       'win_x64_clang_dbg': {
-        'os_type': 'win',
-        'mixins': ['win10', 'x86-64', 'resultdb-json-format'],
-        'test_suites': {
-          'isolated_scripts': 'desktop_tests',
-        },
-      },
-      'win_x64_clang_dbg_win10': {
         'os_type': 'win',
         'mixins': ['win10', 'x86-64', 'resultdb-json-format'],
         'test_suites': {

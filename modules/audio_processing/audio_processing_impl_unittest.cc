@@ -132,13 +132,20 @@ class TestRenderPreProcessor : public CustomProcessing {
 };
 
 // Creates a simple `AudioProcessing` instance for APM input volume testing
-// with analog and digital AGC enabled.
-rtc::scoped_refptr<AudioProcessing> CreateApmForInputVolumeTest() {
+// with AGC1 analog and/or AGC2 input volume controller enabled and AGC2
+// digital controller enabled.
+rtc::scoped_refptr<AudioProcessing> CreateApmForInputVolumeTest(
+    bool agc1_analog_gain_controller_enabled,
+    bool agc2_input_volume_controller_enabled) {
   webrtc::AudioProcessing::Config config;
-  // Enable AGC1 analog.
-  config.gain_controller1.enabled = true;
-  config.gain_controller1.analog_gain_controller.enabled = true;
-  // Enable AGC2 adaptive digital.
+  // Enable AGC1 analog controller.
+  config.gain_controller1.enabled = agc1_analog_gain_controller_enabled;
+  config.gain_controller1.analog_gain_controller.enabled =
+      agc1_analog_gain_controller_enabled;
+  // Enable AG2 input volume controller
+  config.gain_controller2.input_volume_controller.enabled =
+      agc2_input_volume_controller_enabled;
+  // Enable AGC2 adaptive digital controller.
   config.gain_controller1.analog_gain_controller.enable_digital_adaptive =
       false;
   config.gain_controller2.enabled = true;
@@ -146,6 +153,7 @@ rtc::scoped_refptr<AudioProcessing> CreateApmForInputVolumeTest() {
 
   auto apm(AudioProcessingBuilder().Create());
   apm->ApplyConfig(config);
+
   return apm;
 }
 
@@ -177,25 +185,30 @@ int ProcessInputVolume(AudioProcessing& apm,
 
 constexpr char kMinMicLevelFieldTrial[] =
     "WebRTC-Audio-2ndAgcMinMicLevelExperiment";
+constexpr char kMinInputVolumeFieldTrial[] = "WebRTC-Audio-Agc2-MinInputVolume";
 constexpr int kMinInputVolume = 12;
 
 std::string GetMinMicLevelExperimentFieldTrial(absl::optional<int> value) {
-  char field_trial_buffer[64];
+  char field_trial_buffer[128];
   rtc::SimpleStringBuilder builder(field_trial_buffer);
   if (value.has_value()) {
     RTC_DCHECK_GE(*value, 0);
     RTC_DCHECK_LE(*value, 255);
     builder << kMinMicLevelFieldTrial << "/Enabled-" << *value << "/";
+    builder << kMinInputVolumeFieldTrial << "/Enabled-" << *value << "/";
   } else {
     builder << kMinMicLevelFieldTrial << "/Disabled/";
+    builder << kMinInputVolumeFieldTrial << "/Disabled/";
   }
   return builder.str();
 }
 
 // TODO(webrtc:7494): Remove the fieldtrial from the input volume tests when
-// "WebRTC-Audio-2ndAgcMinMicLevelExperiment" is removed.
+// "WebRTC-Audio-2ndAgcMinMicLevelExperiment" and
+// "WebRTC-Audio-Agc2-MinInputVolume" are removed.
 class InputVolumeStartupParameterizedTest
-    : public ::testing::TestWithParam<std::tuple<int, absl::optional<int>>> {
+    : public ::testing::TestWithParam<
+          std::tuple<int, absl::optional<int>, bool, bool>> {
  protected:
   InputVolumeStartupParameterizedTest()
       : field_trials_(
@@ -204,6 +217,12 @@ class InputVolumeStartupParameterizedTest
   int GetMinVolume() const {
     return std::get<1>(GetParam()).value_or(kMinInputVolume);
   }
+  bool GetAgc1AnalogControllerEnabled() const {
+    return std::get<2>(GetParam());
+  }
+  bool GetAgc2InputVolumeControllerEnabled() const {
+    return std::get<3>(GetParam());
+  }
 
  private:
   test::ScopedFieldTrials field_trials_;
@@ -211,7 +230,7 @@ class InputVolumeStartupParameterizedTest
 
 class InputVolumeNotZeroParameterizedTest
     : public ::testing::TestWithParam<
-          std::tuple<int, int, absl::optional<int>>> {
+          std::tuple<int, int, absl::optional<int>, bool, bool>> {
  protected:
   InputVolumeNotZeroParameterizedTest()
       : field_trials_(
@@ -224,13 +243,20 @@ class InputVolumeNotZeroParameterizedTest
   bool GetMinMicLevelExperimentEnabled() {
     return std::get<2>(GetParam()).has_value();
   }
+  bool GetAgc1AnalogControllerEnabled() const {
+    return std::get<3>(GetParam());
+  }
+  bool GetAgc2InputVolumeControllerEnabled() const {
+    return std::get<4>(GetParam());
+  }
 
  private:
   test::ScopedFieldTrials field_trials_;
 };
 
 class InputVolumeZeroParameterizedTest
-    : public ::testing::TestWithParam<std::tuple<int, absl::optional<int>>> {
+    : public ::testing::TestWithParam<
+          std::tuple<int, absl::optional<int>, bool, bool>> {
  protected:
   InputVolumeZeroParameterizedTest()
       : field_trials_(
@@ -238,6 +264,12 @@ class InputVolumeZeroParameterizedTest
   int GetStartupVolume() const { return std::get<0>(GetParam()); }
   int GetMinVolume() const {
     return std::get<1>(GetParam()).value_or(kMinInputVolume);
+  }
+  bool GetAgc1AnalogControllerEnabled() const {
+    return std::get<2>(GetParam());
+  }
+  bool GetAgc2InputVolumeControllerEnabled() const {
+    return std::get<3>(GetParam());
   }
 
  private:
@@ -934,33 +966,57 @@ TEST_P(InputVolumeStartupParameterizedTest,
   const int applied_startup_input_volume = GetStartupVolume();
   const int expected_volume =
       std::max(applied_startup_input_volume, GetMinVolume());
-  auto apm = CreateApmForInputVolumeTest();
+  const bool agc1_analog_controller_enabled = GetAgc1AnalogControllerEnabled();
+  const bool agc2_input_volume_controller_enabled =
+      GetAgc2InputVolumeControllerEnabled();
+  auto apm = CreateApmForInputVolumeTest(agc1_analog_controller_enabled,
+                                         agc2_input_volume_controller_enabled);
 
   const int recommended_input_volume =
       ProcessInputVolume(*apm, /*num_frames=*/1, applied_startup_input_volume);
 
-  ASSERT_EQ(recommended_input_volume, expected_volume);
+  if (!agc1_analog_controller_enabled &&
+      !agc2_input_volume_controller_enabled) {
+    // No input volume changes if none of the analog controllers is enabled.
+    ASSERT_EQ(recommended_input_volume, applied_startup_input_volume);
+  } else {
+    ASSERT_EQ(recommended_input_volume, expected_volume);
+  }
 }
 
 // Tests that the minimum input volume is applied if the volume is manually
-// adjusted to a non-zero value only if
-// "WebRTC-Audio-2ndAgcMinMicLevelExperiment" is enabled.
+// adjusted to a non-zero value 1) always for AGC2 input volume controller and
+// 2) only if "WebRTC-Audio-2ndAgcMinMicLevelExperiment" is enabled for AGC1
+// analog controller.
 TEST_P(InputVolumeNotZeroParameterizedTest,
        VerifyMinVolumeMaybeAppliedAfterManualVolumeAdjustments) {
   const int applied_startup_input_volume = GetStartupVolume();
   const int applied_input_volume = GetVolume();
   const int expected_volume = std::max(applied_input_volume, GetMinVolume());
-  auto apm = CreateApmForInputVolumeTest();
+  const bool agc1_analog_controller_enabled = GetAgc1AnalogControllerEnabled();
+  const bool agc2_input_volume_controller_enabled =
+      GetAgc2InputVolumeControllerEnabled();
+  auto apm = CreateApmForInputVolumeTest(agc1_analog_controller_enabled,
+                                         agc2_input_volume_controller_enabled);
 
   ProcessInputVolume(*apm, /*num_frames=*/1, applied_startup_input_volume);
   const int recommended_input_volume =
       ProcessInputVolume(*apm, /*num_frames=*/1, applied_input_volume);
 
   ASSERT_NE(applied_input_volume, 0);
-  if (GetMinMicLevelExperimentEnabled()) {
-    ASSERT_EQ(recommended_input_volume, expected_volume);
-  } else {
+
+  if (!agc1_analog_controller_enabled &&
+      !agc2_input_volume_controller_enabled) {
+    // No input volume changes if none of the analog controllers is enabled.
     ASSERT_EQ(recommended_input_volume, applied_input_volume);
+  } else {
+    if (GetMinMicLevelExperimentEnabled() ||
+        (!agc1_analog_controller_enabled &&
+         agc2_input_volume_controller_enabled)) {
+      ASSERT_EQ(recommended_input_volume, expected_volume);
+    } else {
+      ASSERT_EQ(recommended_input_volume, applied_input_volume);
+    }
   }
 }
 
@@ -970,15 +1026,25 @@ TEST_P(InputVolumeZeroParameterizedTest,
        VerifyMinVolumeNotAppliedAfterManualVolumeAdjustments) {
   constexpr int kZeroVolume = 0;
   const int applied_startup_input_volume = GetStartupVolume();
-  auto apm = CreateApmForInputVolumeTest();
+  const bool agc1_analog_controller_enabled = GetAgc1AnalogControllerEnabled();
+  const bool agc2_input_volume_controller_enabled =
+      GetAgc2InputVolumeControllerEnabled();
+  auto apm = CreateApmForInputVolumeTest(agc1_analog_controller_enabled,
+                                         agc2_input_volume_controller_enabled);
 
   const int recommended_input_volume_after_startup =
       ProcessInputVolume(*apm, /*num_frames=*/1, applied_startup_input_volume);
   const int recommended_input_volume =
       ProcessInputVolume(*apm, /*num_frames=*/1, kZeroVolume);
 
-  ASSERT_NE(recommended_input_volume, recommended_input_volume_after_startup);
-  ASSERT_EQ(recommended_input_volume, kZeroVolume);
+  if (!agc1_analog_controller_enabled &&
+      !agc2_input_volume_controller_enabled) {
+    // No input volume changes if none of the analog controllers is enabled.
+    ASSERT_EQ(recommended_input_volume, kZeroVolume);
+  } else {
+    ASSERT_NE(recommended_input_volume, recommended_input_volume_after_startup);
+    ASSERT_EQ(recommended_input_volume, kZeroVolume);
+  }
 }
 
 // Tests that the minimum input volume is applied if the volume is not zero
@@ -987,15 +1053,26 @@ TEST_P(InputVolumeNotZeroParameterizedTest,
        VerifyMinVolumeAppliedAfterAutomaticVolumeAdjustments) {
   const int applied_startup_input_volume = GetStartupVolume();
   const int applied_input_volume = GetVolume();
-  auto apm = CreateApmForInputVolumeTest();
+  const bool agc1_analog_controller_enabled = GetAgc1AnalogControllerEnabled();
+  const bool agc2_input_volume_controller_enabled =
+      GetAgc2InputVolumeControllerEnabled();
+  auto apm = CreateApmForInputVolumeTest(agc1_analog_controller_enabled,
+                                         agc2_input_volume_controller_enabled);
 
   ProcessInputVolume(*apm, /*num_frames=*/1, applied_startup_input_volume);
   const int recommended_input_volume =
       ProcessInputVolume(*apm, /*num_frames=*/400, applied_input_volume);
 
   ASSERT_NE(applied_input_volume, 0);
-  if (recommended_input_volume != applied_input_volume) {
-    ASSERT_GE(recommended_input_volume, GetMinVolume());
+
+  if (!agc1_analog_controller_enabled &&
+      !agc2_input_volume_controller_enabled) {
+    // No input volume changes if none of the analog controllers is enabled.
+    ASSERT_EQ(recommended_input_volume, applied_input_volume);
+  } else {
+    if (recommended_input_volume != applied_input_volume) {
+      ASSERT_GE(recommended_input_volume, GetMinVolume());
+    }
   }
 }
 
@@ -1005,35 +1082,51 @@ TEST_P(InputVolumeZeroParameterizedTest,
        VerifyMinVolumeNotAppliedAfterAutomaticVolumeAdjustments) {
   constexpr int kZeroVolume = 0;
   const int applied_startup_input_volume = GetStartupVolume();
-  auto apm = CreateApmForInputVolumeTest();
+  const bool agc1_analog_controller_enabled = GetAgc1AnalogControllerEnabled();
+  const bool agc2_input_volume_controller_enabled =
+      GetAgc2InputVolumeControllerEnabled();
+  auto apm = CreateApmForInputVolumeTest(agc1_analog_controller_enabled,
+                                         agc2_input_volume_controller_enabled);
 
   const int recommended_input_volume_after_startup =
       ProcessInputVolume(*apm, /*num_frames=*/1, applied_startup_input_volume);
   const int recommended_input_volume =
       ProcessInputVolume(*apm, /*num_frames=*/400, kZeroVolume);
 
-  ASSERT_NE(recommended_input_volume, recommended_input_volume_after_startup);
-  ASSERT_EQ(recommended_input_volume, kZeroVolume);
+  if (!agc1_analog_controller_enabled &&
+      !agc2_input_volume_controller_enabled) {
+    // No input volume changes if none of the analog controllers is enabled.
+    ASSERT_EQ(recommended_input_volume, kZeroVolume);
+  } else {
+    ASSERT_NE(recommended_input_volume, recommended_input_volume_after_startup);
+    ASSERT_EQ(recommended_input_volume, kZeroVolume);
+  }
 }
 
 INSTANTIATE_TEST_SUITE_P(AudioProcessingImplTest,
                          InputVolumeStartupParameterizedTest,
                          ::testing::Combine(::testing::Values(0, 5, 30),
                                             ::testing::Values(absl::nullopt,
-                                                              20)));
+                                                              20),
+                                            ::testing::Bool(),
+                                            ::testing::Bool()));
 
 INSTANTIATE_TEST_SUITE_P(AudioProcessingImplTest,
                          InputVolumeNotZeroParameterizedTest,
                          ::testing::Combine(::testing::Values(0, 5, 15),
                                             ::testing::Values(1, 5, 30),
                                             ::testing::Values(absl::nullopt,
-                                                              20)));
+                                                              20),
+                                            ::testing::Bool(),
+                                            ::testing::Bool()));
 
 INSTANTIATE_TEST_SUITE_P(AudioProcessingImplTest,
                          InputVolumeZeroParameterizedTest,
                          ::testing::Combine(::testing::Values(0, 5, 15),
                                             ::testing::Values(absl::nullopt,
-                                                              20)));
+                                                              20),
+                                            ::testing::Bool(),
+                                            ::testing::Bool()));
 
 // When the input volume is not emulated and no input volume controller is
 // active, the recommended volume must always be the applied volume.
@@ -1093,6 +1186,284 @@ TEST(AudioProcessingImplTest,
   EXPECT_EQ(ProcessInputVolume(*apm, kOneFrame, /*initial_volume=*/123), 123);
   EXPECT_EQ(ProcessInputVolume(*apm, kOneFrame, /*initial_volume=*/59), 59);
   EXPECT_EQ(ProcessInputVolume(*apm, kOneFrame, /*initial_volume=*/135), 135);
+}
+
+TEST(AudioProcessingImplInputVolumeControllerExperimentTest,
+     ConfigAdjustedWhenExperimentEnabledAndAgc1AnalogEnabled) {
+  webrtc::test::ScopedFieldTrials field_trials(
+      "WebRTC-Audio-InputVolumeControllerExperiment/"
+      "Enabled,"
+      "enable_clipping_predictor:true,"
+      "clipped_level_min:20,"
+      "clipped_level_step:30,"
+      "clipped_ratio_threshold:0.4,"
+      "clipped_wait_frames:50,"
+      "target_range_max_dbfs:-6,"
+      "target_range_min_dbfs:-70,"
+      "update_input_volume_wait_frames:80,"
+      "speech_probability_threshold:0.9,"
+      "speech_ratio_threshold:1.0/");
+
+  AudioProcessingBuilderForTesting apm_builder;
+
+  // Set a config with analog AGC1 enabled.
+  AudioProcessing::Config config;
+  config.gain_controller1.enabled = true;
+  config.gain_controller1.analog_gain_controller.enabled = true;
+  config.gain_controller1.analog_gain_controller.enable_digital_adaptive = true;
+  config.gain_controller2.enabled = false;
+  config.gain_controller1.mode =
+      AudioProcessing::Config::GainController1::kAdaptiveAnalog;
+
+  EXPECT_FALSE(config.gain_controller2.input_volume_controller.enabled);
+
+  apm_builder.SetConfig(config);
+
+  auto apm = apm_builder.Create();
+  auto adjusted_config = apm->GetConfig();
+
+  // Expect the config to be adjusted.
+  EXPECT_FALSE(adjusted_config.gain_controller1.enabled);
+  EXPECT_FALSE(adjusted_config.gain_controller1.analog_gain_controller.enabled);
+  EXPECT_TRUE(adjusted_config.gain_controller2.enabled);
+  EXPECT_TRUE(adjusted_config.gain_controller2.adaptive_digital.enabled);
+  EXPECT_TRUE(adjusted_config.gain_controller2.input_volume_controller.enabled);
+
+  // Change config back and compare.
+  adjusted_config.gain_controller1.enabled = config.gain_controller1.enabled;
+  adjusted_config.gain_controller1.analog_gain_controller.enabled =
+      config.gain_controller1.analog_gain_controller.enabled;
+  adjusted_config.gain_controller2.enabled = config.gain_controller2.enabled;
+  adjusted_config.gain_controller2.adaptive_digital.enabled =
+      config.gain_controller2.adaptive_digital.enabled;
+  adjusted_config.gain_controller2.input_volume_controller.enabled =
+      config.gain_controller2.input_volume_controller.enabled;
+
+  EXPECT_THAT(adjusted_config.ToString(), ::testing::StrEq(config.ToString()));
+}
+
+TEST(AudioProcessingImplInputVolumeControllerExperimentTest,
+     ConfigAdjustedWhenExperimentEnabledAndHybridAgcEnabled) {
+  webrtc::test::ScopedFieldTrials field_trials(
+      "WebRTC-Audio-InputVolumeControllerExperiment/"
+      "Enabled,"
+      "enable_clipping_predictor:true,"
+      "clipped_level_min:20,"
+      "clipped_level_step:30,"
+      "clipped_ratio_threshold:0.4,"
+      "clipped_wait_frames:50,"
+      "target_range_max_dbfs:-6,"
+      "target_range_min_dbfs:-70,"
+      "update_input_volume_wait_frames:80,"
+      "speech_probability_threshold:0.9,"
+      "speech_ratio_threshold:1.0/");
+
+  AudioProcessingBuilderForTesting apm_builder;
+
+  // Set a config with hybrid AGC enabled.
+  AudioProcessing::Config config;
+  config.gain_controller1.enabled = true;
+  config.gain_controller1.analog_gain_controller.enabled = true;
+  config.gain_controller1.analog_gain_controller.enable_digital_adaptive =
+      false;
+  config.gain_controller2.enabled = true;
+  config.gain_controller2.adaptive_digital.enabled = true;
+  config.gain_controller1.mode =
+      AudioProcessing::Config::GainController1::kAdaptiveAnalog;
+
+  EXPECT_FALSE(config.gain_controller2.input_volume_controller.enabled);
+
+  apm_builder.SetConfig(config);
+
+  auto apm = apm_builder.Create();
+  auto adjusted_config = apm->GetConfig();
+
+  // Expect the config to be adjusted.
+  EXPECT_FALSE(adjusted_config.gain_controller1.enabled);
+  EXPECT_FALSE(adjusted_config.gain_controller1.analog_gain_controller.enabled);
+  EXPECT_TRUE(adjusted_config.gain_controller2.enabled);
+  EXPECT_TRUE(adjusted_config.gain_controller2.adaptive_digital.enabled);
+  EXPECT_TRUE(adjusted_config.gain_controller2.input_volume_controller.enabled);
+
+  // Change config back and compare.
+  adjusted_config.gain_controller1.enabled = config.gain_controller1.enabled;
+  adjusted_config.gain_controller1.analog_gain_controller.enabled =
+      config.gain_controller1.analog_gain_controller.enabled;
+  adjusted_config.gain_controller2.enabled = config.gain_controller2.enabled;
+  adjusted_config.gain_controller2.adaptive_digital.enabled =
+      config.gain_controller2.adaptive_digital.enabled;
+  adjusted_config.gain_controller2.input_volume_controller.enabled =
+      config.gain_controller2.input_volume_controller.enabled;
+
+  EXPECT_THAT(adjusted_config.ToString(), ::testing::StrEq(config.ToString()));
+}
+
+TEST(AudioProcessingImplInputVolumeControllerExperimentTest,
+     ConfigNotAdjustedWhenExperimentEnabledAndAgc1AnalogNotEnabled) {
+  webrtc::test::ScopedFieldTrials field_trials(
+      "WebRTC-Audio-InputVolumeControllerExperiment/"
+      "Enabled,"
+      "enable_clipping_predictor:true,"
+      "clipped_level_min:20,"
+      "clipped_level_step:30,"
+      "clipped_ratio_threshold:0.4,"
+      "clipped_wait_frames:50,"
+      "target_range_max_dbfs:-6,"
+      "target_range_min_dbfs:-70,"
+      "update_input_volume_wait_frames:80,"
+      "speech_probability_threshold:0.9,"
+      "speech_ratio_threshold:1.0/");
+
+  AudioProcessingBuilderForTesting apm_builder;
+
+  // Set a config with analog AGC1 not enabled.
+  AudioProcessing::Config config;
+  config.gain_controller1.enabled = false;
+  config.gain_controller1.analog_gain_controller.enabled = true;
+  config.gain_controller1.analog_gain_controller.enable_digital_adaptive = true;
+  config.gain_controller2.enabled = false;
+  config.gain_controller1.mode =
+      AudioProcessing::Config::GainController1::kAdaptiveAnalog;
+
+  EXPECT_FALSE(config.gain_controller2.input_volume_controller.enabled);
+
+  apm_builder.SetConfig(config);
+
+  auto apm = apm_builder.Create();
+  auto adjusted_config = apm->GetConfig();
+
+  EXPECT_EQ(config.gain_controller1.enabled,
+            adjusted_config.gain_controller1.enabled);
+  EXPECT_EQ(config.gain_controller1.analog_gain_controller.enabled,
+            adjusted_config.gain_controller1.analog_gain_controller.enabled);
+  EXPECT_EQ(config.gain_controller2.enabled,
+            adjusted_config.gain_controller2.enabled);
+  EXPECT_EQ(config.gain_controller2.adaptive_digital.enabled,
+            adjusted_config.gain_controller2.adaptive_digital.enabled);
+  EXPECT_FALSE(
+      adjusted_config.gain_controller2.input_volume_controller.enabled);
+
+  EXPECT_THAT(adjusted_config.ToString(), ::testing::StrEq(config.ToString()));
+}
+
+TEST(AudioProcessingImplInputVolumeControllerExperimentTest,
+     ConfigNotAdjustedWhenExperimentEnabledAndHybridAgcNotEnabled) {
+  webrtc::test::ScopedFieldTrials field_trials(
+      "WebRTC-Audio-InputVolumeControllerExperiment/"
+      "Enabled,"
+      "enable_clipping_predictor:true,"
+      "clipped_level_min:20,"
+      "clipped_level_step:30,"
+      "clipped_ratio_threshold:0.4,"
+      "clipped_wait_frames:50,"
+      "target_range_max_dbfs:-6,"
+      "target_range_min_dbfs:-70,"
+      "update_input_volume_wait_frames:80,"
+      "speech_probability_threshold:0.9,"
+      "speech_ratio_threshold:1.0/");
+
+  AudioProcessingBuilderForTesting apm_builder;
+
+  // Set a config with hybrid AGC analog not enabled.
+  AudioProcessing::Config config;
+  config.gain_controller1.enabled = false;
+  config.gain_controller1.analog_gain_controller.enabled = true;
+  config.gain_controller1.analog_gain_controller.enable_digital_adaptive =
+      false;
+  config.gain_controller2.enabled = true;
+  config.gain_controller2.adaptive_digital.enabled = true;
+  config.gain_controller1.mode =
+      AudioProcessing::Config::GainController1::kAdaptiveAnalog;
+
+  EXPECT_FALSE(config.gain_controller2.input_volume_controller.enabled);
+
+  apm_builder.SetConfig(config);
+
+  auto apm = apm_builder.Create();
+  auto adjusted_config = apm->GetConfig();
+
+  EXPECT_EQ(config.gain_controller1.enabled,
+            adjusted_config.gain_controller1.enabled);
+  EXPECT_EQ(config.gain_controller1.analog_gain_controller.enabled,
+            adjusted_config.gain_controller1.analog_gain_controller.enabled);
+  EXPECT_EQ(config.gain_controller2.enabled,
+            adjusted_config.gain_controller2.enabled);
+  EXPECT_EQ(config.gain_controller2.adaptive_digital.enabled,
+            adjusted_config.gain_controller2.adaptive_digital.enabled);
+  EXPECT_FALSE(
+      adjusted_config.gain_controller2.input_volume_controller.enabled);
+
+  EXPECT_THAT(adjusted_config.ToString(), ::testing::StrEq(config.ToString()));
+}
+
+TEST(AudioProcessingImplInputVolumeControllerExperimentTest,
+     ConfigNotAdjustedWhenExperimentNotEnabledAndAgc1AnalogEnabled) {
+  AudioProcessingBuilderForTesting apm_builder;
+
+  // Set a config with analog AGC1 analog enabled.
+  AudioProcessing::Config config;
+  config.gain_controller1.enabled = true;
+  config.gain_controller1.analog_gain_controller.enabled = true;
+  config.gain_controller1.analog_gain_controller.enable_digital_adaptive = true;
+  config.gain_controller2.enabled = false;
+  config.gain_controller1.mode =
+      AudioProcessing::Config::GainController1::kAdaptiveAnalog;
+
+  EXPECT_FALSE(config.gain_controller2.input_volume_controller.enabled);
+
+  apm_builder.SetConfig(config);
+
+  auto apm = apm_builder.Create();
+  auto adjusted_config = apm->GetConfig();
+
+  EXPECT_EQ(config.gain_controller1.enabled,
+            adjusted_config.gain_controller1.enabled);
+  EXPECT_EQ(config.gain_controller1.analog_gain_controller.enabled,
+            adjusted_config.gain_controller1.analog_gain_controller.enabled);
+  EXPECT_EQ(config.gain_controller2.enabled,
+            adjusted_config.gain_controller2.enabled);
+  EXPECT_EQ(config.gain_controller2.adaptive_digital.enabled,
+            adjusted_config.gain_controller2.adaptive_digital.enabled);
+  EXPECT_FALSE(
+      adjusted_config.gain_controller2.input_volume_controller.enabled);
+
+  EXPECT_THAT(adjusted_config.ToString(), ::testing::StrEq(config.ToString()));
+}
+
+TEST(AudioProcessingImplInputVolumeControllerExperimentTest,
+     ConfigNotAdjustedWhenExperimentNotEnabledAndHybridAgcEnabled) {
+  AudioProcessingBuilderForTesting apm_builder;
+
+  // Set a config with hybrid AGC enabled.
+  AudioProcessing::Config config;
+  config.gain_controller1.enabled = true;
+  config.gain_controller1.analog_gain_controller.enabled = true;
+  config.gain_controller1.analog_gain_controller.enable_digital_adaptive =
+      false;
+  config.gain_controller2.enabled = true;
+  config.gain_controller2.adaptive_digital.enabled = true;
+  config.gain_controller1.mode =
+      AudioProcessing::Config::GainController1::kAdaptiveAnalog;
+
+  EXPECT_FALSE(config.gain_controller2.input_volume_controller.enabled);
+
+  apm_builder.SetConfig(config);
+
+  auto apm = apm_builder.Create();
+  auto adjusted_config = apm->GetConfig();
+
+  EXPECT_EQ(config.gain_controller1.enabled,
+            adjusted_config.gain_controller1.enabled);
+  EXPECT_EQ(config.gain_controller1.analog_gain_controller.enabled,
+            adjusted_config.gain_controller1.analog_gain_controller.enabled);
+  EXPECT_EQ(config.gain_controller2.enabled,
+            adjusted_config.gain_controller2.enabled);
+  EXPECT_EQ(config.gain_controller2.adaptive_digital.enabled,
+            adjusted_config.gain_controller2.adaptive_digital.enabled);
+  EXPECT_FALSE(
+      adjusted_config.gain_controller2.input_volume_controller.enabled);
+
+  EXPECT_THAT(adjusted_config.ToString(), ::testing::StrEq(config.ToString()));
 }
 
 }  // namespace webrtc
