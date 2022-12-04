@@ -184,6 +184,7 @@
       'linux_compile_rel': 'pure_release_bot_x64',
       'linux_compile_x86_dbg': 'debug_bot_x86',
       'linux_compile_x86_rel': 'pure_release_bot_x86',
+      'linux_coverage': 'code_coverage_bot_x64',
       'linux_dbg': 'debug_bot_x64',
       'linux_libfuzzer_rel': 'libfuzzer_asan_release_bot_x64',
       'linux_more_configs': {
@@ -243,7 +244,8 @@
     'android_pure_release_bot_arm64': ['android', 'pure_release_bot', 'arm64'],
     'android_release_bot_arm': ['android', 'release_bot', 'arm'],
     'android_release_bot_arm64': ['android', 'release_bot', 'arm64'],
-    'android_release_bot_arm_reclient': ['android', 'release_bot_reclient', 'arm'],
+    'android_release_bot_arm_reclient':
+    ['android', 'release_bot_reclient', 'arm'],
     'android_release_bot_x64': ['android', 'release_bot', 'x64'],
     'android_release_bot_x86': ['android', 'release_bot', 'x86'],
     'asan_lsan_clang_release_bot_x64':
@@ -252,6 +254,8 @@
     ['android', 'debug_static_bot', 'arm', 'bwe_test_logging'],
     'bwe_test_logging_x64': ['debug_bot', 'x64', 'bwe_test_logging'],
     'bwe_test_logging_x86': ['debug_bot', 'x86', 'bwe_test_logging'],
+    'code_coverage_bot_x64':
+    ['openh264', 'release_bot', 'x64', 'code_coverage'],
     'codesearch_gen_linux_bot': ['openh264', 'debug_bot', 'minimal_symbols'],
     'debug_bot_arm': ['openh264', 'debug_bot', 'arm'],
     'debug_bot_arm64': ['openh264', 'debug_bot', 'arm64'],
@@ -280,9 +284,8 @@
       'ios', 'release_bot', 'arm64', 'ios_code_signing_identity_description',
       'xctest'
     ],
-    'ios_release_bot_arm64': [
-      'ios', 'release_bot', 'arm64', 'no_ios_code_signing', 'xctest',
-    ],
+    'ios_release_bot_arm64':
+    ['ios', 'release_bot', 'arm64', 'no_ios_code_signing', 'xctest'],
     'libfuzzer_asan_release_bot_x64': [
       'libfuzzer', 'asan', 'optimize_for_fuzzing', 'openh264',
       'pure_release_bot', 'x64'
@@ -307,22 +310,21 @@
     'release_bot_arm64': ['openh264', 'release_bot', 'arm64'],
     'release_bot_x64': ['openh264', 'release_bot', 'x64'],
     'release_bot_x64_fuchsia': ['openh264', 'release_bot', 'x64', 'fuchsia'],
-    'release_bot_x64_reclient': [
-      'openh264', 'release_bot_reclient', 'x64',
-    ],
+    'release_bot_x64_reclient': ['openh264', 'release_bot_reclient', 'x64'],
     'release_bot_x86': ['openh264', 'release_bot', 'x86'],
-    'rtti_no_sctp_android_arm': [
-      'android', 'debug_static_bot', 'arm', 'rtti', 'no_sctp'
-    ],
+    'rtti_no_sctp_android_arm':
+    ['android', 'debug_static_bot', 'arm', 'rtti', 'no_sctp'],
     'rtti_no_sctp_no_unicode_win_x86':
     ['debug_bot', 'x86', 'rtti', 'no_sctp', 'win_undef_unicode'],
     'rtti_no_sctp_x64': ['debug_bot', 'x64', 'rtti', 'no_sctp'],
     'tsan_clang_release_bot_x64':
     ['tsan', 'clang', 'openh264', 'pure_release_bot', 'x64'],
-    'ubsan_clang_release_bot_x64':
-    ['ubsan', 'clang', 'openh264', 'pure_release_bot', 'x64'],
-    'ubsan_vptr_clang_release_bot_x64':
-    ['ubsan_vptr', 'clang', 'openh264', 'pure_release_bot', 'x64'],
+    'ubsan_clang_release_bot_x64': [
+      'ubsan', 'clang', 'openh264', 'pure_release_bot', 'x64'
+    ],
+    'ubsan_vptr_clang_release_bot_x64': [
+      'ubsan_vptr', 'clang', 'openh264', 'pure_release_bot', 'x64'
+    ],
     'win_asan_clang_release_bot_x64': [
       'asan',
       'clang',
@@ -385,6 +387,9 @@
     # is_clang=true by default, this is only to guard from upstream changes.
     'clang': {
       'gn_args': 'is_clang=true',
+    },
+    'code_coverage': {
+      'gn_args': 'use_clang_coverage=true',
     },
     'dcheck_always_on': {
       'gn_args': 'dcheck_always_on=true',

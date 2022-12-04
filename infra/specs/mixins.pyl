@@ -124,6 +124,9 @@
       }
     }
   },
+  'isolate_profile_data': {
+    'isolate_profile_data': True
+  },
   'linux-bionic': {
     'swarming': {
       'dimensions': {
@@ -192,6 +195,15 @@
       'args': ['--out-dir', '${ISOLATED_OUTDIR}']
     }
   },
+  'perf-fuchsia-perf-tests': {
+    'merge': {
+      'script': '//tools_webrtc/perf/process_perf_results.py',
+      'args': ['--test-suite', 'fuchsia_perf_tests']
+    },
+    '$mixin_append': {
+      'args': ['--nologs']
+    }
+  },
   'perf-low-bandwidth-audio-perf-test': {
     'merge': {
       'script': '//tools_webrtc/perf/process_perf_results.py',
@@ -209,7 +221,17 @@
     'swarming': {
       'idempotent': False,
       'dimensions': {
-        'pool': 'WebRTC-perf'
+        'pool': 'WebRTC-perf',
+        'gce': '0'
+      }
+    }
+  },
+  'perf-pool-vm': {
+    'swarming': {
+      'idempotent': False,
+      'dimensions': {
+        'pool': 'WebRTC-perf',
+        'gce': '1'
       }
     }
   },
@@ -224,8 +246,7 @@
   },
   'quick-perf-tests': {
     '$mixin_append': {
-      'args':
-      ['--force_fieldtrials=WebRTC-QuickPerfTest/Enabled/', '--nologs']
+      'args': ['--force_fieldtrials=WebRTC-QuickPerfTest/Enabled/', '--nologs']
     }
   },
   'redfin': {

@@ -375,9 +375,6 @@ RtpVideoSender::RtpVideoSender(
     const FieldTrialsView& field_trials,
     TaskQueueFactory* task_queue_factory)
     : field_trials_(field_trials),
-      send_side_bwe_with_overhead_(!absl::StartsWith(
-          field_trials_.Lookup("WebRTC-SendSideBwe-WithOverhead"),
-          "Disabled")),
       use_frame_rate_for_overhead_(absl::StartsWith(
           field_trials_.Lookup("WebRTC-Video-UseFrameRateForOverhead"),
           "Enabled")),
@@ -409,7 +406,7 @@ RtpVideoSender::RtpVideoSender(
       frame_count_observer_(observers.frame_count_observer) {
   transport_checker_.Detach();
   RTC_DCHECK_EQ(rtp_config_.ssrcs.size(), rtp_streams_.size());
-  if (send_side_bwe_with_overhead_ && has_packet_feedback_)
+  if (has_packet_feedback_)
     transport_->IncludeOverheadInPacedSender();
   // SSRCs are assumed to be sorted in the same order as `rtp_modules`.
   for (uint32_t ssrc : rtp_config_.ssrcs) {
@@ -480,33 +477,24 @@ RtpVideoSender::~RtpVideoSender() {
   RTC_DCHECK(!registered_for_feedback_);
 }
 
-void RtpVideoSender::SetActive(bool active) {
+void RtpVideoSender::Stop() {
   RTC_DCHECK_RUN_ON(&transport_checker_);
   MutexLock lock(&mutex_);
-  if (active_ == active)
+  if (!active_)
     return;
 
-  const std::vector<bool> active_modules(rtp_streams_.size(), active);
+  const std::vector<bool> active_modules(rtp_streams_.size(), false);
   SetActiveModulesLocked(active_modules);
-
-  auto* feedback_provider = transport_->GetStreamFeedbackProvider();
-  if (active && !registered_for_feedback_) {
-    feedback_provider->RegisterStreamFeedbackObserver(rtp_config_.ssrcs, this);
-    registered_for_feedback_ = true;
-  } else if (!active && registered_for_feedback_) {
-    feedback_provider->DeRegisterStreamFeedbackObserver(this);
-    registered_for_feedback_ = false;
-  }
 }
 
-void RtpVideoSender::SetActiveModules(const std::vector<bool> active_modules) {
+void RtpVideoSender::SetActiveModules(const std::vector<bool>& active_modules) {
   RTC_DCHECK_RUN_ON(&transport_checker_);
   MutexLock lock(&mutex_);
   return SetActiveModulesLocked(active_modules);
 }
 
 void RtpVideoSender::SetActiveModulesLocked(
-    const std::vector<bool> active_modules) {
+    const std::vector<bool>& active_modules) {
   RTC_DCHECK_RUN_ON(&transport_checker_);
   RTC_DCHECK_EQ(rtp_streams_.size(), active_modules.size());
   active_ = false;
@@ -537,6 +525,17 @@ void RtpVideoSender::SetActiveModulesLocked(
       transport_->packet_router()->AddSendRtpModule(&rtp_module,
                                                     /*remb_candidate=*/true);
     }
+  }
+  if (!active_) {
+    auto* feedback_provider = transport_->GetStreamFeedbackProvider();
+    if (registered_for_feedback_) {
+      feedback_provider->DeRegisterStreamFeedbackObserver(this);
+      registered_for_feedback_ = false;
+    }
+  } else if (!registered_for_feedback_) {
+    auto* feedback_provider = transport_->GetStreamFeedbackProvider();
+    feedback_provider->RegisterStreamFeedbackObserver(rtp_config_.ssrcs, this);
+    registered_for_feedback_ = true;
   }
 }
 
@@ -835,7 +834,7 @@ void RtpVideoSender::OnBitrateUpdated(BitrateAllocationUpdate update,
   DataSize max_total_packet_size = DataSize::Bytes(
       rtp_config_.max_packet_size + transport_overhead_bytes_per_packet_);
   uint32_t payload_bitrate_bps = update.target_bitrate.bps();
-  if (send_side_bwe_with_overhead_ && has_packet_feedback_) {
+  if (has_packet_feedback_) {
     DataRate overhead_rate =
         CalculateOverheadRate(update.target_bitrate, max_total_packet_size,
                               packet_overhead, Frequency::Hertz(framerate));
@@ -869,7 +868,7 @@ void RtpVideoSender::OnBitrateUpdated(BitrateAllocationUpdate update,
   loss_mask_vector_.clear();
 
   uint32_t encoder_overhead_rate_bps = 0;
-  if (send_side_bwe_with_overhead_ && has_packet_feedback_) {
+  if (has_packet_feedback_) {
     // TODO(srte): The packet size should probably be the same as in the
     // CalculateOverheadRate call above (just max_total_packet_size), it doesn't
     // make sense to use different packet rates for different overhead
@@ -882,12 +881,11 @@ void RtpVideoSender::OnBitrateUpdated(BitrateAllocationUpdate update,
         encoder_overhead_rate.bps<uint32_t>(),
         update.target_bitrate.bps<uint32_t>() - encoder_target_rate_bps_);
   }
-  // When the field trial "WebRTC-SendSideBwe-WithOverhead" is enabled
-  // protection_bitrate includes overhead.
   const uint32_t media_rate = encoder_target_rate_bps_ +
                               encoder_overhead_rate_bps +
                               packetization_rate_bps;
   RTC_DCHECK_GE(update.target_bitrate, DataRate::BitsPerSec(media_rate));
+  // `protection_bitrate_bps_` includes overhead.
   protection_bitrate_bps_ = update.target_bitrate.bps() - media_rate;
 }
 
