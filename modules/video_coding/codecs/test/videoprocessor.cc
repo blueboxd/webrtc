@@ -238,8 +238,15 @@ void VideoProcessor::ProcessFrame() {
   const size_t frame_number = last_inputed_frame_num_++;
 
   // Get input frame and store for future quality calculation.
+  Resolution resolution = Resolution({.width = config_.codec_settings.width,
+                                      .height = config_.codec_settings.height});
+  FrameReader::Ratio framerate_scale = FrameReader::Ratio(
+      {.num = config_.clip_fps.value_or(config_.codec_settings.maxFramerate),
+       .den = static_cast<int>(config_.codec_settings.maxFramerate)});
   rtc::scoped_refptr<I420BufferInterface> buffer =
-      input_frame_reader_->ReadFrame();
+      input_frame_reader_->PullFrame(
+          /*frame_num*/ nullptr, resolution, framerate_scale);
+
   RTC_CHECK(buffer) << "Tried to read too many frames from the file.";
   const size_t timestamp =
       last_inputed_timestamp_ +
@@ -307,8 +314,10 @@ void VideoProcessor::ProcessFrame() {
   // Encode.
   const std::vector<VideoFrameType> frame_types =
       (frame_number == 0)
-          ? std::vector<VideoFrameType>{VideoFrameType::kVideoFrameKey}
-          : std::vector<VideoFrameType>{VideoFrameType::kVideoFrameDelta};
+          ? std::vector<VideoFrameType>(num_simulcast_or_spatial_layers_,
+                                        VideoFrameType::kVideoFrameKey)
+          : std::vector<VideoFrameType>(num_simulcast_or_spatial_layers_,
+                                        VideoFrameType::kVideoFrameDelta);
   const int encode_return_code = encoder_->Encode(input_frame, &frame_types);
   for (size_t i = 0; i < num_simulcast_or_spatial_layers_; ++i) {
     FrameStatistics* frame_stat = stats_->GetFrame(frame_number, i);
