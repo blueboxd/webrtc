@@ -18,6 +18,7 @@
 
 #include "rtc_base/numerics/safe_minmax.h"
 #include "rtc_base/strings/string_builder.h"
+#include "system_wrappers/include/metrics.h"
 #include "test/field_trial.h"
 #include "test/gmock.h"
 #include "test/gtest.h"
@@ -59,9 +60,9 @@ constexpr InputVolumeControllerConfig kDefaultInputVolumeControllerConfig{};
 constexpr ClippingPredictorConfig kDefaultClippingPredictorConfig{};
 
 std::unique_ptr<InputVolumeController> CreateInputVolumeController(
-    int clipped_level_step,
-    float clipped_ratio_threshold,
-    int clipped_wait_frames,
+    int clipped_level_step = kClippedLevelStep,
+    float clipped_ratio_threshold = kClippedRatioThreshold,
+    int clipped_wait_frames = kClippedWaitFrames,
     bool enable_clipping_predictor = false,
     int update_input_volume_wait_frames = 0) {
   InputVolumeControllerConfig config{
@@ -194,6 +195,7 @@ class SpeechSamplesReader {
   // does not loop. `speech_probability` and `speech_level_dbfs` are passed to
   // `Process()`.
   void Feed(int num_frames,
+            int applied_input_volume,
             int gain_db,
             float speech_probability,
             absl::optional<float> speech_level_dbfs,
@@ -214,9 +216,10 @@ class SpeechSamplesReader {
                        return rtc::SafeClamp(static_cast<float>(v) * gain,
                                              kMinSample, kMaxSample);
                      });
-
+      controller.set_stream_analog_level(applied_input_volume);
       controller.AnalyzePreProcess(audio_buffer_);
       controller.Process(speech_probability, speech_level_dbfs);
+      applied_input_volume = controller.recommended_analog_level();
     }
   }
 
@@ -798,11 +801,11 @@ TEST(InputVolumeControllerTest, MinInputVolumeCheckMinLevelWithClipping) {
     return controller;
   };
   std::unique_ptr<InputVolumeController> controller = factory();
-  std::unique_ptr<InputVolumeController> manager_with_override;
+  std::unique_ptr<InputVolumeController> controller_with_override;
   {
     test::ScopedFieldTrials field_trial(
         GetAgcMinInputVolumeFieldTrialEnabled(kMinInputVolume));
-    manager_with_override = factory();
+    controller_with_override = factory();
   }
 
   // Create a test input signal which containts 80% of clipped samples.
@@ -819,18 +822,19 @@ TEST(InputVolumeControllerTest, MinInputVolumeCheckMinLevelWithClipping) {
                            *controller);
   CallPreProcessAndProcess(/*num_calls=*/400, audio_buffer,
                            kLowSpeechProbability, /*speech_level_dbfs=*/-42.0f,
-                           *manager_with_override);
+                           *controller_with_override);
 
   // Make sure that an adaptation occurred.
   ASSERT_GT(controller->recommended_analog_level(), 0);
 
   // Check that the test signal triggers a larger downward adaptation for
   // `controller`, which is allowed to reach a lower gain.
-  EXPECT_GT(manager_with_override->recommended_analog_level(),
+  EXPECT_GT(controller_with_override->recommended_analog_level(),
             controller->recommended_analog_level());
-  // Check that the gain selected by `manager_with_override` equals the
+  // Check that the gain selected by `controller_with_override` equals the
   // minimum value overridden via field trial.
-  EXPECT_EQ(manager_with_override->recommended_analog_level(), kMinInputVolume);
+  EXPECT_EQ(controller_with_override->recommended_analog_level(),
+            kMinInputVolume);
 }
 
 // Checks that, when the "WebRTC-Audio-Agc2-MinInputVolume" field trial is
@@ -854,11 +858,11 @@ TEST(InputVolumeControllerTest,
     return controller;
   };
   std::unique_ptr<InputVolumeController> controller = factory();
-  std::unique_ptr<InputVolumeController> manager_with_override;
+  std::unique_ptr<InputVolumeController> controller_with_override;
   {
     test::ScopedFieldTrials field_trial(
         GetAgcMinInputVolumeFieldTrialEnabled(kMinInputVolume));
-    manager_with_override = factory();
+    controller_with_override = factory();
   }
 
   // Create a test input signal which containts 80% of clipped samples.
@@ -874,18 +878,19 @@ TEST(InputVolumeControllerTest,
       /*speech_level_dbfs=*/-18.0f, *controller);
   CallPreProcessAndProcess(
       /*num_calls=*/400, audio_buffer, kHighSpeechProbability,
-      /*speech_level_dbfs=*/-18.0f, *manager_with_override);
+      /*speech_level_dbfs=*/-18.0f, *controller_with_override);
 
   // Make sure that an adaptation occurred.
   ASSERT_GT(controller->recommended_analog_level(), 0);
 
   // Check that the test signal triggers a larger downward adaptation for
   // `controller`, which is allowed to reach a lower gain.
-  EXPECT_GT(manager_with_override->recommended_analog_level(),
+  EXPECT_GT(controller_with_override->recommended_analog_level(),
             controller->recommended_analog_level());
-  // Check that the gain selected by `manager_with_override` equals the minimum
-  // value overridden via field trial.
-  EXPECT_EQ(manager_with_override->recommended_analog_level(), kMinInputVolume);
+  // Check that the gain selected by `controller_with_override` equals the
+  // minimum value overridden via field trial.
+  EXPECT_EQ(controller_with_override->recommended_analog_level(),
+            kMinInputVolume);
 }
 
 // Checks that, when the "WebRTC-Audio-Agc2-MinInputVolume" field trial is
@@ -909,7 +914,7 @@ TEST(InputVolumeControllerTest, MinInputVolumeCompareMicLevelWithClipping) {
     return controller;
   };
   std::unique_ptr<InputVolumeController> controller = factory();
-  std::unique_ptr<InputVolumeController> manager_with_override;
+  std::unique_ptr<InputVolumeController> controller_with_override;
   {
     constexpr int kMinInputVolume = 20;
     static_assert(kDefaultInputVolumeControllerConfig.clipped_level_min >=
@@ -917,7 +922,7 @@ TEST(InputVolumeControllerTest, MinInputVolumeCompareMicLevelWithClipping) {
                   "Use a lower override value.");
     test::ScopedFieldTrials field_trial(
         GetAgcMinInputVolumeFieldTrialEnabled(kMinInputVolume));
-    manager_with_override = factory();
+    controller_with_override = factory();
   }
 
   // Create a test input signal which containts 80% of clipped samples.
@@ -934,7 +939,7 @@ TEST(InputVolumeControllerTest, MinInputVolumeCompareMicLevelWithClipping) {
                            *controller);
   CallPreProcessAndProcess(/*num_calls=*/400, audio_buffer,
                            kLowSpeechProbability, /*speech_level_dbfs=*/-18,
-                           *manager_with_override);
+                           *controller_with_override);
 
   // Make sure that an adaptation occurred.
   ASSERT_GT(controller->recommended_analog_level(), 0);
@@ -944,8 +949,8 @@ TEST(InputVolumeControllerTest, MinInputVolumeCompareMicLevelWithClipping) {
   // expected because the minimum microphone level override is less than the
   // minimum level used when clipping is detected.
   EXPECT_EQ(controller->recommended_analog_level(),
-            manager_with_override->recommended_analog_level());
-  EXPECT_EQ(manager_with_override->recommended_analog_level(),
+            controller_with_override->recommended_analog_level());
+  EXPECT_EQ(controller_with_override->recommended_analog_level(),
             kDefaultInputVolumeControllerConfig.clipped_level_min);
 }
 
@@ -974,7 +979,7 @@ TEST(InputVolumeControllerTest,
     return controller;
   };
   std::unique_ptr<InputVolumeController> controller = factory();
-  std::unique_ptr<InputVolumeController> manager_with_override;
+  std::unique_ptr<InputVolumeController> controller_with_override;
   {
     constexpr int kMinInputVolume = 20;
     static_assert(kDefaultInputVolumeControllerConfig.clipped_level_min >=
@@ -982,7 +987,7 @@ TEST(InputVolumeControllerTest,
                   "Use a lower override value.");
     test::ScopedFieldTrials field_trial(
         GetAgcMinInputVolumeFieldTrialEnabled(kMinInputVolume));
-    manager_with_override = factory();
+    controller_with_override = factory();
   }
 
   // Create a test input signal which containts 80% of clipped samples.
@@ -998,7 +1003,7 @@ TEST(InputVolumeControllerTest,
   CallPreProcessAndProcess(
       /*num_calls=*/400, audio_buffer,
       /*speech_probability=*/0.7f,
-      /*speech_level_dbfs=*/-18.0f, *manager_with_override);
+      /*speech_level_dbfs=*/-18.0f, *controller_with_override);
 
   // Make sure that an adaptation occurred.
   ASSERT_GT(controller->recommended_analog_level(), 0);
@@ -1008,8 +1013,8 @@ TEST(InputVolumeControllerTest,
   // expected because the minimum microphone level override is less than the
   // minimum level used when clipping is detected.
   EXPECT_EQ(controller->recommended_analog_level(),
-            manager_with_override->recommended_analog_level());
-  EXPECT_EQ(manager_with_override->recommended_analog_level(),
+            controller_with_override->recommended_analog_level());
+  EXPECT_EQ(controller_with_override->recommended_analog_level(),
             kDefaultInputVolumeControllerConfig.clipped_level_min);
 }
 
@@ -1025,14 +1030,14 @@ TEST_P(InputVolumeControllerParametrizedTest, ClippingParametersVerified) {
   EXPECT_EQ(controller->clipped_level_step_, kClippedLevelStep);
   EXPECT_EQ(controller->clipped_ratio_threshold_, kClippedRatioThreshold);
   EXPECT_EQ(controller->clipped_wait_frames_, kClippedWaitFrames);
-  std::unique_ptr<InputVolumeController> manager_custom =
+  std::unique_ptr<InputVolumeController> controller_custom =
       CreateInputVolumeController(/*clipped_level_step=*/10,
                                   /*clipped_ratio_threshold=*/0.2f,
                                   /*clipped_wait_frames=*/50);
-  manager_custom->Initialize();
-  EXPECT_EQ(manager_custom->clipped_level_step_, 10);
-  EXPECT_EQ(manager_custom->clipped_ratio_threshold_, 0.2f);
-  EXPECT_EQ(manager_custom->clipped_wait_frames_, 50);
+  controller_custom->Initialize();
+  EXPECT_EQ(controller_custom->clipped_level_step_, 10);
+  EXPECT_EQ(controller_custom->clipped_ratio_threshold_, 0.2f);
+  EXPECT_EQ(controller_custom->clipped_wait_frames_, 50);
 }
 
 TEST_P(InputVolumeControllerParametrizedTest,
@@ -1250,19 +1255,16 @@ TEST_P(InputVolumeControllerParametrizedTest, EmptyRmsErrorHasNoEffect) {
                                    GetInputVolumeControllerTestConfig());
   controller.Initialize();
 
-  constexpr int kInputVolume = kInitialInputVolume;
-  controller.set_stream_analog_level(kInputVolume);
-
   // Feed speech with low energy that would trigger an upward adapation of
   // the analog level if an speech level was not low and the RMS level empty.
   constexpr int kNumFrames = 125;
   constexpr int kGainDb = -20;
   SpeechSamplesReader reader;
-  reader.Feed(kNumFrames, kGainDb, kLowSpeechProbability, absl::nullopt,
-              controller);
+  reader.Feed(kNumFrames, kInitialInputVolume, kGainDb, kLowSpeechProbability,
+              absl::nullopt, controller);
 
   // Check that no adaptation occurs.
-  ASSERT_EQ(controller.recommended_analog_level(), kInputVolume);
+  ASSERT_EQ(controller.recommended_analog_level(), kInitialInputVolume);
 }
 
 // Checks that the recommended input volume is not updated unless enough
@@ -1281,23 +1283,26 @@ TEST(InputVolumeControllerTest, UpdateInputVolumeWaitFramesIsEffective) {
                                   /*update_input_volume_wait_frames=*/100);
   controller_wait_0->Initialize();
   controller_wait_100->Initialize();
-  controller_wait_0->set_stream_analog_level(kInputVolume);
-  controller_wait_100->set_stream_analog_level(kInputVolume);
 
   SpeechSamplesReader reader_1;
   SpeechSamplesReader reader_2;
-  reader_1.Feed(/*num_frames=*/99, /*gain_db=*/0, kHighSpeechProbability,
+  reader_1.Feed(/*num_frames=*/99, kInputVolume, /*gain_db=*/0,
+                kHighSpeechProbability,
                 /*speech_level_dbfs=*/-42.0f, *controller_wait_0);
-  reader_2.Feed(/*num_frames=*/99, /*gain_db=*/0, kHighSpeechProbability,
+  reader_2.Feed(/*num_frames=*/99, kInputVolume, /*gain_db=*/0,
+                kHighSpeechProbability,
                 /*speech_level_dbfs=*/-42.0f, *controller_wait_100);
 
   // Check that adaptation only occurs if enough frames have been processed.
   ASSERT_GT(controller_wait_0->recommended_analog_level(), kInputVolume);
   ASSERT_EQ(controller_wait_100->recommended_analog_level(), kInputVolume);
 
-  reader_1.Feed(/*num_frames=*/1, /*gain_db=*/0, kHighSpeechProbability,
+  reader_1.Feed(/*num_frames=*/1, controller_wait_0->recommended_analog_level(),
+                /*gain_db=*/0, kHighSpeechProbability,
                 /*speech_level_dbfs=*/-42.0f, *controller_wait_0);
-  reader_2.Feed(/*num_frames=*/1, /*gain_db=*/0, kHighSpeechProbability,
+  reader_2.Feed(/*num_frames=*/1,
+                controller_wait_100->recommended_analog_level(), /*gain_db=*/0,
+                kHighSpeechProbability,
                 /*speech_level_dbfs=*/-42.0f, *controller_wait_100);
 
   // Check that adaptation only occurs when enough frames have been processed.
@@ -1321,38 +1326,36 @@ TEST(InputVolumeControllerTest, SpeechRatioThresholdIsEffective) {
                                   /*update_input_volume_wait_frames=*/10);
   controller_1->Initialize();
   controller_2->Initialize();
-  controller_1->set_stream_analog_level(kInputVolume);
-  controller_2->set_stream_analog_level(kInputVolume);
 
   SpeechSamplesReader reader_1;
   SpeechSamplesReader reader_2;
 
-  reader_1.Feed(/*num_frames=*/1, /*gain_db=*/0,
+  reader_1.Feed(/*num_frames=*/1, kInputVolume, /*gain_db=*/0,
                 /*speech_probability=*/0.7f, /*speech_level_dbfs=*/-42.0f,
                 *controller_1);
-  reader_2.Feed(/*num_frames=*/1, /*gain_db=*/0,
+  reader_2.Feed(/*num_frames=*/1, kInputVolume, /*gain_db=*/0,
                 /*speech_probability=*/0.4f, /*speech_level_dbfs=*/-42.0f,
                 *controller_2);
 
   ASSERT_EQ(controller_1->recommended_analog_level(), kInputVolume);
   ASSERT_EQ(controller_2->recommended_analog_level(), kInputVolume);
 
-  reader_1.Feed(/*num_frames=*/2, /*gain_db=*/0,
-                /*speech_probability=*/0.4f, /*speech_level_dbfs=*/-42.0f,
-                *controller_1);
-  reader_2.Feed(/*num_frames=*/2, /*gain_db=*/0,
-                /*speech_probability=*/0.4f, /*speech_level_dbfs=*/-42.0f,
-                *controller_2);
+  reader_1.Feed(
+      /*num_frames=*/2, controller_1->recommended_analog_level(), /*gain_db=*/0,
+      /*speech_probability=*/0.4f, /*speech_level_dbfs=*/-42.0f, *controller_1);
+  reader_2.Feed(
+      /*num_frames=*/2, controller_2->recommended_analog_level(), /*gain_db=*/0,
+      /*speech_probability=*/0.4f, /*speech_level_dbfs=*/-42.0f, *controller_2);
 
   ASSERT_EQ(controller_1->recommended_analog_level(), kInputVolume);
   ASSERT_EQ(controller_2->recommended_analog_level(), kInputVolume);
 
-  reader_1.Feed(/*num_frames=*/7, /*gain_db=*/0,
-                /*speech_probability=*/0.7f, /*speech_level_dbfs=*/-42.0f,
-                *controller_1);
-  reader_2.Feed(/*num_frames=*/7, /*gain_db=*/0,
-                /*speech_probability=*/0.7f, /*speech_level_dbfs=*/-42.0f,
-                *controller_2);
+  reader_1.Feed(
+      /*num_frames=*/7, controller_1->recommended_analog_level(), /*gain_db=*/0,
+      /*speech_probability=*/0.7f, /*speech_level_dbfs=*/-42.0f, *controller_1);
+  reader_2.Feed(
+      /*num_frames=*/7, controller_2->recommended_analog_level(), /*gain_db=*/0,
+      /*speech_probability=*/0.7f, /*speech_level_dbfs=*/-42.0f, *controller_2);
 
   ASSERT_GT(controller_1->recommended_analog_level(), kInputVolume);
   ASSERT_EQ(controller_2->recommended_analog_level(), kInputVolume);
@@ -1374,8 +1377,6 @@ TEST(InputVolumeControllerTest, SpeechProbabilityThresholdIsEffective) {
                                   /*update_input_volume_wait_frames=*/10);
   controller_1->Initialize();
   controller_2->Initialize();
-  controller_1->set_stream_analog_level(kInputVolume);
-  controller_2->set_stream_analog_level(kInputVolume);
 
   SpeechSamplesReader reader_1;
   SpeechSamplesReader reader_2;
@@ -1384,35 +1385,93 @@ TEST(InputVolumeControllerTest, SpeechProbabilityThresholdIsEffective) {
   // that make the volume to be adjusted after enough frames have been
   // processsed and `reader_2` to process inputs that won't make the volume
   // to be adjusted.
-  reader_1.Feed(/*num_frames=*/1, /*gain_db=*/0,
+  reader_1.Feed(/*num_frames=*/1, kInputVolume, /*gain_db=*/0,
                 /*speech_probability=*/0.5f, /*speech_level_dbfs=*/-42.0f,
                 *controller_1);
-  reader_2.Feed(/*num_frames=*/1, /*gain_db=*/0,
+  reader_2.Feed(/*num_frames=*/1, kInputVolume, /*gain_db=*/0,
                 /*speech_probability=*/0.49f, /*speech_level_dbfs=*/-42.0f,
                 *controller_2);
 
   ASSERT_EQ(controller_1->recommended_analog_level(), kInputVolume);
   ASSERT_EQ(controller_2->recommended_analog_level(), kInputVolume);
 
-  reader_1.Feed(/*num_frames=*/2, /*gain_db=*/0,
+  reader_1.Feed(/*num_frames=*/2, controller_1->recommended_analog_level(),
+                /*gain_db=*/0,
                 /*speech_probability=*/0.49f, /*speech_level_dbfs=*/-42.0f,
                 *controller_1);
-  reader_2.Feed(/*num_frames=*/2, /*gain_db=*/0,
+  reader_2.Feed(/*num_frames=*/2, controller_2->recommended_analog_level(),
+                /*gain_db=*/0,
                 /*speech_probability=*/0.49f, /*speech_level_dbfs=*/-42.0f,
                 *controller_2);
 
   ASSERT_EQ(controller_1->recommended_analog_level(), kInputVolume);
   ASSERT_EQ(controller_2->recommended_analog_level(), kInputVolume);
 
-  reader_1.Feed(/*num_frames=*/7, /*gain_db=*/0,
-                /*speech_probability=*/0.5f, /*speech_level_dbfs=*/-42.0f,
-                *controller_1);
-  reader_2.Feed(/*num_frames=*/7, /*gain_db=*/0,
-                /*speech_probability=*/0.5f, /*speech_level_dbfs=*/-42.0f,
-                *controller_2);
+  reader_1.Feed(
+      /*num_frames=*/7, controller_1->recommended_analog_level(), /*gain_db=*/0,
+      /*speech_probability=*/0.5f, /*speech_level_dbfs=*/-42.0f, *controller_1);
+  reader_2.Feed(
+      /*num_frames=*/7, controller_2->recommended_analog_level(), /*gain_db=*/0,
+      /*speech_probability=*/0.5f, /*speech_level_dbfs=*/-42.0f, *controller_2);
 
   ASSERT_GT(controller_1->recommended_analog_level(), kInputVolume);
   ASSERT_EQ(controller_2->recommended_analog_level(), kInputVolume);
+}
+
+TEST(InputVolumeControllerTest,
+     DoNotLogRecommendedInputVolumeOnChangeToMatchTarget) {
+  SpeechSamplesReader reader;
+  auto controller = CreateInputVolumeController();
+  controller->Initialize();
+  // Trigger a downward volume change by inputting audio that clips. Pass a
+  // speech level that falls in the target range to make sure that the
+  // adaptation is not made to match the target range.
+  constexpr int kStartupVolume = 255;
+  reader.Feed(/*num_frames=*/14, kStartupVolume, /*gain_db=*/50,
+              kHighSpeechProbability,
+              /*speech_level_dbfs=*/-20.0f, *controller);
+  ASSERT_LT(controller->recommended_analog_level(), kStartupVolume);
+  EXPECT_METRIC_THAT(
+      metrics::Samples(
+          "WebRTC.Audio.Apm.RecommendedInputVolume.OnChangeToMatchTarget"),
+      ::testing::IsEmpty());
+}
+
+TEST(InputVolumeControllerTest,
+     LogRecommendedInputVolumeOnUpwardChangeToMatchTarget) {
+  SpeechSamplesReader reader;
+  auto controller = CreateInputVolumeController();
+  controller->Initialize();
+  constexpr int kStartupVolume = 100;
+  // Trigger an upward volume change by inputting audio that does not clip and
+  // by passing a speech level below the target range.
+  reader.Feed(/*num_frames=*/14, kStartupVolume, /*gain_db=*/-6,
+              kHighSpeechProbability,
+              /*speech_level_dbfs=*/-50.0f, *controller);
+  ASSERT_GT(controller->recommended_analog_level(), kStartupVolume);
+  EXPECT_METRIC_THAT(
+      metrics::Samples(
+          "WebRTC.Audio.Apm.RecommendedInputVolume.OnChangeToMatchTarget"),
+      ::testing::Not(::testing::IsEmpty()));
+}
+
+TEST(InputVolumeControllerTest,
+     LogRecommendedInputVolumeOnDownwardChangeToMatchTarget) {
+  SpeechSamplesReader reader;
+  auto controller = CreateInputVolumeController();
+  controller->Initialize();
+  constexpr int kStartupVolume = 100;
+  controller->set_stream_analog_level(kStartupVolume);
+  // Trigger a downward volume change by inputting audio that does not clip and
+  // by passing a speech level above the target range.
+  reader.Feed(/*num_frames=*/14, kStartupVolume, /*gain_db=*/-6,
+              kHighSpeechProbability,
+              /*speech_level_dbfs=*/-5.0f, *controller);
+  ASSERT_LT(controller->recommended_analog_level(), kStartupVolume);
+  EXPECT_METRIC_THAT(
+      metrics::Samples(
+          "WebRTC.Audio.Apm.RecommendedInputVolume.OnChangeToMatchTarget"),
+      ::testing::Not(::testing::IsEmpty()));
 }
 
 TEST(MonoInputVolumeControllerTest, CheckHandleClippingLowersVolume) {
