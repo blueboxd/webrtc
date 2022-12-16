@@ -15,6 +15,7 @@
 
 #include "api/array_view.h"
 #include "modules/audio_processing/agc2/gain_map_internal.h"
+#include "modules/audio_processing/agc2/input_volume_stats_reporter.h"
 #include "modules/audio_processing/include/audio_frame_view.h"
 #include "rtc_base/checks.h"
 #include "rtc_base/logging.h"
@@ -47,29 +48,6 @@ Agc1ClippingPredictorConfig CreateClippingPredictorConfig(bool enabled) {
   config.enabled = enabled;
 
   return config;
-}
-
-// Returns the minimum input volume to recommend.
-// If the "WebRTC-Audio-Agc2-MinInputVolume" field trial is specified, parses it
-// and returns the value specified after "Enabled-" if valid - i.e., in the
-// range 0-255. Otherwise returns the default value.
-// Example:
-// "WebRTC-Audio-Agc2-MinInputVolume/Enabled-80" => returns 80.
-int GetMinInputVolume() {
-  constexpr int kDefaultMinInputVolume = 12;
-  constexpr char kFieldTrial[] = "WebRTC-Audio-Agc2-MinInputVolume";
-  if (!webrtc::field_trial::IsEnabled(kFieldTrial)) {
-    return kDefaultMinInputVolume;
-  }
-  std::string field_trial_str = webrtc::field_trial::FindFullName(kFieldTrial);
-  int min_input_volume = -1;
-  sscanf(field_trial_str.c_str(), "Enabled-%d", &min_input_volume);
-  if (min_input_volume >= 0 && min_input_volume <= 255) {
-    return min_input_volume;
-  }
-  RTC_LOG(LS_WARNING) << "[AGC2] Invalid volume for " << kFieldTrial
-                      << ", ignored.";
-  return kDefaultMinInputVolume;
 }
 
 // Returns an input volume in the [`min_input_volume`, `kMaxInputVolume`] range
@@ -376,7 +354,7 @@ void MonoInputVolumeController::UpdateInputVolume(int rms_error_db) {
 InputVolumeController::InputVolumeController(int num_capture_channels,
                                              const Config& config)
     : num_capture_channels_(num_capture_channels),
-      min_input_volume_(GetMinInputVolume()),
+      min_input_volume_(config.min_input_volume),
       capture_output_used_(true),
       clipped_level_step_(config.clipped_level_step),
       clipped_ratio_threshold_(config.clipped_ratio_threshold),
@@ -425,9 +403,17 @@ void InputVolumeController::Initialize() {
   AggregateChannelLevels();
   clipping_rate_log_ = 0.0f;
   clipping_rate_log_counter_ = 0;
+
+  applied_input_volume_ = absl::nullopt;
 }
 
-void InputVolumeController::AnalyzePreProcess(const AudioBuffer& audio_buffer) {
+void InputVolumeController::AnalyzeInputAudio(int applied_input_volume,
+                                              const AudioBuffer& audio_buffer) {
+  RTC_DCHECK_GE(applied_input_volume, 0);
+  RTC_DCHECK_LE(applied_input_volume, 255);
+
+  SetAppliedInputVolume(applied_input_volume);
+
   RTC_DCHECK_EQ(audio_buffer.num_channels(), channel_controllers_.size());
   const float* const* audio = audio_buffer.channels_const();
   size_t samples_per_channel = audio_buffer.num_frames();
@@ -512,13 +498,20 @@ void InputVolumeController::AnalyzePreProcess(const AudioBuffer& audio_buffer) {
   AggregateChannelLevels();
 }
 
-void InputVolumeController::Process(float speech_probability,
-                                    absl::optional<float> speech_level_dbfs) {
+absl::optional<int> InputVolumeController::RecommendInputVolume(
+    float speech_probability,
+    absl::optional<float> speech_level_dbfs) {
+  // Only process if applied input volume is set.
+  if (!applied_input_volume_.has_value()) {
+    RTC_LOG(LS_ERROR) << "[AGC2] Applied input volume not set.";
+    return absl::nullopt;
+  }
+
   AggregateChannelLevels();
   const int volume_after_clipping_handling = recommended_input_volume_;
 
   if (!capture_output_used_) {
-    return;
+    return applied_input_volume_;
   }
 
   absl::optional<int> rms_error_db;
@@ -536,10 +529,12 @@ void InputVolumeController::Process(float speech_probability,
   if (volume_after_clipping_handling != recommended_input_volume_) {
     // The recommended input volume was adjusted in order to match the target
     // level.
-    RTC_HISTOGRAM_COUNTS_LINEAR(
-        "WebRTC.Audio.Apm.RecommendedInputVolume.OnChangeToMatchTarget",
-        recommended_input_volume_, 1, kMaxInputVolume, 50);
+    UpdateHistogramOnRecommendedInputVolumeChangeToMatchTarget(
+        recommended_input_volume_);
   }
+
+  applied_input_volume_ = absl::nullopt;
+  return recommended_input_volume();
 }
 
 void InputVolumeController::HandleCaptureOutputUsedChange(
@@ -551,7 +546,9 @@ void InputVolumeController::HandleCaptureOutputUsedChange(
   capture_output_used_ = capture_output_used;
 }
 
-void InputVolumeController::set_stream_analog_level(int input_volume) {
+void InputVolumeController::SetAppliedInputVolume(int input_volume) {
+  applied_input_volume_ = input_volume;
+
   for (auto& controller : channel_controllers_) {
     controller->set_stream_analog_level(input_volume);
   }
@@ -572,7 +569,7 @@ void InputVolumeController::AggregateChannelLevels() {
   }
 
   // Enforce the minimum input volume when a recommendation is made.
-  if (new_recommended_input_volume > 0) {
+  if (applied_input_volume_.has_value() && *applied_input_volume_ > 0) {
     new_recommended_input_volume =
         std::max(new_recommended_input_volume, min_input_volume_);
   }

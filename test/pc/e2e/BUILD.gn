@@ -10,11 +10,7 @@ import("../../../webrtc.gni")
 
 rtc_library("metric_metadata_keys") {
   testonly = true
-  sources = [
-    "metric_metadata_keys.cc",
-    "metric_metadata_keys.h",
-  ]
-  deps = [ "../..:test_support" ]
+  sources = [ "metric_metadata_keys.h" ]
 }
 
 if (!build_with_chromium) {
@@ -562,6 +558,8 @@ if (!build_with_chromium) {
       "../../../api:libjingle_peerconnection_api",
       "../../../api:rtp_parameters",
       "../../../api/test/pclf:media_configuration",
+      "../../../media:media_constants",
+      "../../../media:rid_description",
       "../../../media:rtc_media_base",
       "../../../p2p:rtc_p2p",
       "../../../pc:sdp_utils",

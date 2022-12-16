@@ -35,6 +35,9 @@ class InputVolumeController final {
  public:
   // Config for the constructor.
   struct Config {
+    // Minimum input volume that can be recommended. Not enforced when the
+    // applied input volume is zero outside startup.
+    int min_input_volume = 20;
     // Lowest input volume level that will be applied in response to clipping.
     int clipped_level_min = 70;
     // Amount input volume level is lowered with every clipping event. Limited
@@ -52,13 +55,9 @@ class InputVolumeController final {
     // [`target_range_min_dbfs`, `target_range_max_dbfs`], no input volume
     // adjustments are done based on the speech level. For speech levels below
     // and above the range, the targets `target_range_min_dbfs` and
-    // `target_range_max_dbfs` are used, respectively. The example values
-    // `target_range_max_dbfs` -18 and `target_range_min_dbfs` -48 refer to a
-    // configuration where the zero-digital-gain target is -18 dBFS and the
-    // digital gain control is expected to compensate for speech level errors
-    // up to -30 dB.
-    int target_range_max_dbfs = -18;
-    int target_range_min_dbfs = -48;
+    // `target_range_max_dbfs` are used, respectively.
+    int target_range_max_dbfs = -30;
+    int target_range_min_dbfs = -50;
     // Number of wait frames between the recommended input volume updates.
     int update_input_volume_wait_frames = 100;
     // Speech probability threshold: speech probabilities below the threshold
@@ -81,33 +80,24 @@ class InputVolumeController final {
   // TODO(webrtc:7494): Integrate initialization into ctor and remove.
   void Initialize();
 
-  // Sets the applied input volume.
-  void set_stream_analog_level(int level);
+  // Analyzes `audio_buffer` before `RecommendInputVolume()` is called so tha
+  // the analysis can be performed before digital processing operations take
+  // place (e.g., echo cancellation). The analysis consists of input clipping
+  // detection and prediction (if enabled).
+  void AnalyzeInputAudio(int applied_input_volume,
+                         const AudioBuffer& audio_buffer);
 
-  // TODO(bugs.webrtc.org/7494): Add argument for the applied input volume and
-  // remove `set_stream_analog_level()`.
-  // Analyzes `audio` before `Process()` is called so that the analysis can be
-  // performed before digital processing operations take place (e.g., echo
-  // cancellation). The analysis consists of input clipping detection and
-  // prediction (if enabled). Must be called after `set_stream_analog_level()`.
-  void AnalyzePreProcess(const AudioBuffer& audio_buffer);
-
-  // TODO(bugs.webrtc.org/7494): Rename, audio not passed to the method anymore.
   // Adjusts the recommended input volume upwards/downwards based on the result
-  // of `AnalyzePreProcess()` and on  `speech_level_dbfs` (if specified). Must
-  // be called after `AnalyzePreProcess()`. The value of `speech_probability` is
-  // expected to be in the range [0, 1] and `speech_level_dbfs` in the the range
-  // [-90, 30].
-  void Process(float speech_probability,
-               absl::optional<float> speech_level_dbfs);
-
-  // TODO(bugs.webrtc.org/7494): Return recommended input volume and remove
-  // `recommended_analog_level()`.
-  // Returns the recommended input volume. If the input volume contoller is
-  // disabled, returns the input volume set via the latest
-  // `set_stream_analog_level()` call. Must be called after
-  // `AnalyzePreProcess()` and `Process()`.
-  int recommended_analog_level() const { return recommended_input_volume_; }
+  // of `AnalyzeInputAudio()` and on `speech_level_dbfs` (if specified). Must
+  // be called after `AnalyzeInputAudio()`.  The value of `speech_probability`
+  // is expected to be in the range [0, 1] and `speech_level_dbfs` in the range
+  // [-90, 30] and both should be estimated after echo cancellation and noise
+  // suppression are applied. Returns a non-empty input volume recommendation if
+  // available. If `capture_output_used_` is true, returns the applied input
+  // volume.
+  absl::optional<int> RecommendInputVolume(
+      float speech_probability,
+      absl::optional<float> speech_level_dbfs);
 
   // Stores whether the capture output will be used or not. Call when the
   // capture stream output has been flagged to be used/not-used. If unused, the
@@ -124,6 +114,14 @@ class InputVolumeController final {
     return use_clipping_predictor_step_;
   }
 
+  // Only use for testing: Use `RecommendInputVolume()` elsewhere.
+  // Returns the value of a member variable, needed for testing
+  // `AnalyzeInputAudio()`.
+  int recommended_input_volume() const { return recommended_input_volume_; }
+
+  // Only use for testing.
+  bool capture_output_used() const { return capture_output_used_; }
+
  private:
   friend class InputVolumeControllerTestHelper;
 
@@ -137,6 +135,9 @@ class InputVolumeController final {
   FRIEND_TEST_ALL_PREFIXES(InputVolumeControllerParametrizedTest,
                            ClippingParametersVerified);
 
+  // Sets the applied input volume and resets the recommended input volume.
+  void SetAppliedInputVolume(int level);
+
   void AggregateChannelLevels();
 
   const int num_capture_channels_;
@@ -144,15 +145,17 @@ class InputVolumeController final {
   // Minimum input volume that can be recommended.
   const int min_input_volume_;
 
-  // TODO(bugs.webrtc.org/7494): Create a separate member for the applied input
-  // volume.
   // TODO(bugs.webrtc.org/7494): Once
   // `AudioProcessingImpl::recommended_stream_analog_level()` becomes a trivial
   // getter, leave uninitialized.
-  // Recommended input volume. After `set_stream_analog_level()` is called it
-  // holds the observed input volume. Possibly updated by `AnalyzePreProcess()`
-  // and `Process()`; after these calls, holds the recommended input volume.
+  // Recommended input volume. After `SetAppliedInputVolume()` is called it
+  // holds holds the observed input volume. Possibly updated by
+  // `AnalyzePreProcess()` and `Process()`; after these calls, holds the
+  // recommended input volume.
   int recommended_input_volume_ = 0;
+  // Applied input volume. After `SetAppliedInputVolume()` is called it holds
+  // the current applied volume.
+  absl::optional<int> applied_input_volume_;
 
   bool capture_output_used_;
 

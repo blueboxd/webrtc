@@ -8,20 +8,20 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#include "test/pc/e2e/metric_metadata_keys.h"
+#include "api/test/create_video_codec_tester.h"
 
-#include <string>
+#include <memory>
+#include <utility>
 
-#include "test/gtest.h"
+#include "api/test/video_codec_tester.h"
+#include "modules/video_coding/codecs/test/video_codec_tester_impl.h"
 
 namespace webrtc {
-namespace webrtc_pc_e2e {
+namespace test {
 
-std::string GetCurrentTestName() {
-  const testing::TestInfo* test_info =
-      testing::UnitTest::GetInstance()->current_test_info();
-  return test_info->name();
+std::unique_ptr<VideoCodecTester> CreateVideoCodecTester() {
+  return std::make_unique<VideoCodecTesterImpl>();
 }
 
-}  // namespace webrtc_pc_e2e
+}  // namespace test
 }  // namespace webrtc
