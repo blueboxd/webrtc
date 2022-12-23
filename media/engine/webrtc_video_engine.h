@@ -31,8 +31,8 @@
 #include "call/flexfec_receive_stream.h"
 #include "call/video_receive_stream.h"
 #include "call/video_send_stream.h"
+#include "media/base/media_channel_impl.h"
 #include "media/base/media_engine.h"
-#include "media/engine/unhandled_packets_buffer.h"
 #include "rtc_base/network_route.h"
 #include "rtc_base/synchronization/mutex.h"
 #include "rtc_base/system/no_unique_address.h"
@@ -234,10 +234,6 @@ class WebRtcVideoChannel : public VideoMediaChannel,
   static constexpr int kDefaultQpMax = 56;
 
   std::vector<webrtc::RtpSource> GetSources(uint32_t ssrc) const override;
-
-  // Take the buffered packets for `ssrcs` and feed them into DeliverPacket.
-  // This method does nothing unless unknown_ssrc_packet_buffer_ is configured.
-  void BackfillBufferedPackets(rtc::ArrayView<const uint32_t> ssrcs);
 
   // Implements webrtc::EncoderSwitchRequestCallback.
   void RequestEncoderFallback() override;
@@ -469,7 +465,6 @@ class WebRtcVideoChannel : public VideoMediaChannel,
       : public rtc::VideoSinkInterface<webrtc::VideoFrame> {
    public:
     WebRtcVideoReceiveStream(
-        WebRtcVideoChannel* channel,
         webrtc::Call* call,
         const StreamParams& sp,
         webrtc::VideoReceiveStreamInterface::Config config,
@@ -537,7 +532,6 @@ class WebRtcVideoChannel : public VideoMediaChannel,
     // were applied.
     bool ReconfigureCodecs(const std::vector<VideoCodecSettings>& recv_codecs);
 
-    WebRtcVideoChannel* const channel_;
     webrtc::Call* const call_;
     const StreamParams stream_params_;
 
@@ -552,10 +546,6 @@ class WebRtcVideoChannel : public VideoMediaChannel,
 
     webrtc::Mutex sink_lock_;
     rtc::VideoSinkInterface<webrtc::VideoFrame>* sink_
-        RTC_GUARDED_BY(sink_lock_);
-    // Expands remote RTP timestamps to int64_t to be able to estimate how long
-    // the stream has been running.
-    rtc::TimestampWrapAroundHandler timestamp_wraparound_handler_
         RTC_GUARDED_BY(sink_lock_);
     int64_t first_frame_timestamp_ RTC_GUARDED_BY(sink_lock_);
     // Start NTP time is estimated as current remote NTP time (estimated from
@@ -680,10 +670,6 @@ class WebRtcVideoChannel : public VideoMediaChannel,
   // Optional frame transformer set on unsignaled streams.
   rtc::scoped_refptr<webrtc::FrameTransformerInterface>
       unsignaled_frame_transformer_ RTC_GUARDED_BY(thread_checker_);
-
-  // Buffer for unhandled packets.
-  std::unique_ptr<UnhandledPacketsBuffer> unknown_ssrc_packet_buffer_
-      RTC_GUARDED_BY(thread_checker_);
 
   // TODO(bugs.webrtc.org/11341): Remove this and relevant PC API. Presence
   // of multiple negotiated codecs allows generic encoder fallback on failures.

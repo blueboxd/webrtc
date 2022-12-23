@@ -625,7 +625,8 @@ VideoReceiveStreamInterface::Stats ReceiveStatisticsProxy::GetStats() const {
   stats_.total_pauses_duration_ms =
       video_quality_observer_->TotalPausesDurationMs();
   stats_.total_inter_frame_delay =
-      video_quality_observer_->TotalFramesDurationMs() / 1000.0;
+      static_cast<double>(video_quality_observer_->TotalFramesDurationMs()) /
+      rtc::kNumMillisecsPerSec;
   stats_.total_squared_inter_frame_delay =
       video_quality_observer_->SumSquaredFrameDurationsSec();
 
