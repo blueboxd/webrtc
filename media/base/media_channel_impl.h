@@ -45,6 +45,7 @@
 #include "media/base/codec.h"
 #include "media/base/media_channel.h"
 #include "media/base/stream_params.h"
+#include "modules/rtp_rtcp/source/rtp_packet_received.h"
 #include "rtc_base/async_packet_socket.h"
 #include "rtc_base/checks.h"
 #include "rtc_base/copy_on_write_buffer.h"
@@ -89,8 +90,7 @@ class MediaChannel : public MediaSendChannelInterface,
   // even when abstract, to tell the compiler that all instances of the name
   // referred to by subclasses of this share the same implementation.
   cricket::MediaType media_type() const override = 0;
-  void OnPacketReceived(rtc::CopyOnWriteBuffer packet,
-                        int64_t packet_time_us) override = 0;
+  void OnPacketReceived(const webrtc::RtpPacketReceived& packet) override = 0;
   void OnPacketSent(const rtc::SentPacket& sent_packet) override = 0;
   void OnReadyToSend(bool ready) override = 0;
   void OnNetworkRouteChanged(absl::string_view transport_name,
@@ -221,11 +221,23 @@ class VideoMediaChannel : public MediaChannel,
   // need access to bitrates of the streams, or change the (RTC)StatsCollector
   // so that it's getting the send stream stats separately by calling
   // GetStats(), and merges with BandwidthEstimationInfo by itself.
-  virtual void FillBitrateInfo(BandwidthEstimationInfo* bwe_info) = 0;
+  void FillBitrateInfo(BandwidthEstimationInfo* bwe_info) override = 0;
   // Gets quality stats for the channel.
-  virtual bool GetStats(VideoMediaInfo* info) = 0;
+  virtual bool GetSendStats(VideoMediaSendInfo* info) = 0;
+  virtual bool GetReceiveStats(VideoMediaReceiveInfo* info) = 0;
   // Enable network condition based codec switching.
   void SetVideoCodecSwitchingEnabled(bool enabled) override;
+
+ private:
+  // Functions not implemented on this interface
+  bool GetStats(VideoMediaSendInfo* info) override {
+    RTC_CHECK_NOTREACHED();
+    return false;
+  }
+  bool GetStats(VideoMediaReceiveInfo* info) override {
+    RTC_CHECK_NOTREACHED();
+    return false;
+  }
 };
 
 // Base class for implementation classes
@@ -261,8 +273,21 @@ class VoiceMediaChannel : public MediaChannel,
   }
 
   // Gets quality stats for the channel.
-  virtual bool GetStats(VoiceMediaInfo* info,
-                        bool get_and_clear_legacy_stats) = 0;
+  virtual bool GetSendStats(VoiceMediaSendInfo* info) = 0;
+  virtual bool GetReceiveStats(VoiceMediaReceiveInfo* info,
+                               bool get_and_clear_legacy_stats) = 0;
+
+ private:
+  // Functions not implemented on this interface
+  bool GetStats(VoiceMediaSendInfo* info) override {
+    RTC_CHECK_NOTREACHED();
+    return false;
+  }
+  bool GetStats(VoiceMediaReceiveInfo* info,
+                bool get_and_clear_legacy_stats) override {
+    RTC_CHECK_NOTREACHED();
+    return false;
+  }
 };
 
 // The externally exposed objects that support the Send and Receive interfaces.
@@ -280,9 +305,8 @@ class VoiceMediaSendChannel : public VoiceMediaSendChannelInterface {
 
   // Implementation of MediaBaseChannelInterface
   cricket::MediaType media_type() const override { return MEDIA_TYPE_AUDIO; }
-  void OnPacketReceived(rtc::CopyOnWriteBuffer packet,
-                        int64_t packet_time_us) override {
-    impl()->OnPacketReceived(packet, packet_time_us);
+  void OnPacketReceived(const webrtc::RtpPacketReceived& packet) override {
+    impl()->OnPacketReceived(packet);
   }
   void OnPacketSent(const rtc::SentPacket& sent_packet) override {
     impl()->OnPacketSent(sent_packet);
@@ -345,6 +369,9 @@ class VoiceMediaSendChannel : public VoiceMediaSendChannelInterface {
   bool InsertDtmf(uint32_t ssrc, int event, int duration) override {
     return impl()->InsertDtmf(ssrc, event, duration);
   }
+  bool GetStats(VoiceMediaSendInfo* info) override {
+    return impl_->GetSendStats(info);
+  }
 
  private:
   VoiceMediaSendChannelInterface* impl() { return impl_; }
@@ -358,9 +385,8 @@ class VoiceMediaReceiveChannel : public VoiceMediaReceiveChannelInterface {
   virtual ~VoiceMediaReceiveChannel() {}
   // Implementation of MediaBaseChannelInterface
   cricket::MediaType media_type() const override { return MEDIA_TYPE_AUDIO; }
-  void OnPacketReceived(rtc::CopyOnWriteBuffer packet,
-                        int64_t packet_time_us) override {
-    impl()->OnPacketReceived(packet, packet_time_us);
+  void OnPacketReceived(const webrtc::RtpPacketReceived& packet) override {
+    impl()->OnPacketReceived(packet);
   }
   void OnPacketSent(const rtc::SentPacket& sent_packet) override {
     impl()->OnPacketSent(sent_packet);
@@ -391,6 +417,9 @@ class VoiceMediaReceiveChannel : public VoiceMediaReceiveChannelInterface {
   }
   void ResetUnsignaledRecvStream() override {
     return impl()->ResetUnsignaledRecvStream();
+  }
+  absl::optional<uint32_t> GetUnsignaledSsrc() const override {
+    return impl()->GetUnsignaledSsrc();
   }
   void OnDemuxerCriteriaUpdatePending() override {
     impl()->OnDemuxerCriteriaUpdatePending();
@@ -438,6 +467,9 @@ class VoiceMediaReceiveChannel : public VoiceMediaReceiveChannelInterface {
       std::unique_ptr<webrtc::AudioSinkInterface> sink) override {
     return impl()->SetDefaultRawAudioSink(std::move(sink));
   }
+  bool GetStats(VoiceMediaReceiveInfo* info, bool reset_legacy) override {
+    return impl_->GetReceiveStats(info, reset_legacy);
+  }
 
  private:
   VoiceMediaReceiveChannelInterface* impl() { return impl_; }
@@ -456,10 +488,9 @@ class VideoMediaSendChannel : public VideoMediaSendChannelInterface {
   }
 
   // Implementation of MediaBaseChannelInterface
-  cricket::MediaType media_type() const override { return MEDIA_TYPE_AUDIO; }
-  void OnPacketReceived(rtc::CopyOnWriteBuffer packet,
-                        int64_t packet_time_us) override {
-    impl()->OnPacketReceived(packet, packet_time_us);
+  cricket::MediaType media_type() const override { return MEDIA_TYPE_VIDEO; }
+  void OnPacketReceived(const webrtc::RtpPacketReceived& packet) override {
+    impl()->OnPacketReceived(packet);
   }
   void OnPacketSent(const rtc::SentPacket& sent_packet) override {
     impl()->OnPacketSent(sent_packet);
@@ -528,6 +559,12 @@ class VideoMediaSendChannel : public VideoMediaSendChannelInterface {
   void SetVideoCodecSwitchingEnabled(bool enabled) override {
     return impl()->SetVideoCodecSwitchingEnabled(enabled);
   }
+  bool GetStats(VideoMediaSendInfo* info) override {
+    return impl_->GetSendStats(info);
+  }
+  void FillBitrateInfo(BandwidthEstimationInfo* bwe_info) override {
+    return impl_->FillBitrateInfo(bwe_info);
+  }
 
  private:
   VideoMediaSendChannelInterface* impl() { return impl_; }
@@ -539,10 +576,9 @@ class VideoMediaReceiveChannel : public VideoMediaReceiveChannelInterface {
  public:
   explicit VideoMediaReceiveChannel(VideoMediaChannel* impl) : impl_(impl) {}
   // Implementation of MediaBaseChannelInterface
-  cricket::MediaType media_type() const override { return MEDIA_TYPE_AUDIO; }
-  void OnPacketReceived(rtc::CopyOnWriteBuffer packet,
-                        int64_t packet_time_us) override {
-    impl()->OnPacketReceived(packet, packet_time_us);
+  cricket::MediaType media_type() const override { return MEDIA_TYPE_VIDEO; }
+  void OnPacketReceived(const webrtc::RtpPacketReceived& packet) override {
+    impl()->OnPacketReceived(packet);
   }
   void OnPacketSent(const rtc::SentPacket& sent_packet) override {
     impl()->OnPacketSent(sent_packet);
@@ -565,6 +601,9 @@ class VideoMediaReceiveChannel : public VideoMediaReceiveChannelInterface {
     return impl()->GetBaseMinimumPlayoutDelayMs(ssrc);
   }
   // Implementation of MediaReceiveChannelInterface
+  VideoMediaReceiveChannelInterface* AsVideoReceiveChannel() override {
+    return this;
+  }
   bool AddRecvStream(const StreamParams& sp) override {
     return impl()->AddRecvStream(sp);
   }
@@ -573,6 +612,9 @@ class VideoMediaReceiveChannel : public VideoMediaReceiveChannelInterface {
   }
   void ResetUnsignaledRecvStream() override {
     return impl()->ResetUnsignaledRecvStream();
+  }
+  absl::optional<uint32_t> GetUnsignaledSsrc() const override {
+    return impl()->GetUnsignaledSsrc();
   }
   void OnDemuxerCriteriaUpdatePending() override {
     impl()->OnDemuxerCriteriaUpdatePending();
@@ -625,6 +667,9 @@ class VideoMediaReceiveChannel : public VideoMediaReceiveChannelInterface {
   // Clear recordable encoded frame callback for `ssrc`
   void ClearRecordableEncodedFrameCallback(uint32_t ssrc) override {
     impl()->ClearRecordableEncodedFrameCallback(ssrc);
+  }
+  bool GetStats(VideoMediaReceiveInfo* info) override {
+    return impl_->GetReceiveStats(info);
   }
 
  private:
