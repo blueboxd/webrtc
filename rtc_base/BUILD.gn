@@ -1320,6 +1320,7 @@ if (is_win) {
 
 if (!build_with_chromium) {
   rtc_library("log_sinks") {
+    visibility = [ "*" ]
     sources = [
       "log_sinks.cc",
       "log_sinks.h",
@@ -2132,14 +2133,10 @@ if (rtc_include_tests) {
         "numerics/running_statistics_unittest.cc",
         "numerics/sequence_number_unwrapper_unittest.cc",
         "numerics/sequence_number_util_unittest.cc",
-        "numerics/sequence_numbers_conformance_test.cc",
       ]
       deps = [
         ":rtc_numerics",
-        ":strong_alias",
         ":timeutils",
-        "../modules:module_api_public",
-        "../net/dcsctp/common:sequence_numbers",
         "../test:test_main",
         "../test:test_support",
       ]
