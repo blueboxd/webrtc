@@ -51,6 +51,15 @@
       }
     }
   },
+  'fuchsia-gtest-output': {
+    '$mixin_append': {
+      'args': [
+        '--test-launcher-summary-output=${ISOLATED_OUTDIR}/gtest_output.json',
+        '--test-arg=--gtest_output=json:/custom_artifacts/gtest_output.json',
+        '--test-arg=--undefok=test_launcher_summary_output'
+      ]
+    }
+  },
   'has_native_resultdb_integration': {
     'resultdb': {
       'enable': True,
@@ -72,39 +81,6 @@
         'os': 'iOS-12.4.1',
         'pool': 'WebRTC',
         'id': 'build15-a7'
-      }
-    }
-  },
-  'ios-simulator-12.4': {
-    '$mixin_append': {
-      'args': ['--platform', 'iPhone X', '--version', '12.4'],
-      'swarming': {
-        'named_caches': [{
-          'name': 'runtime_ios_12_4',
-          'path': 'Runtime-ios-12.4'
-        }]
-      }
-    }
-  },
-  'ios-simulator-13.6': {
-    '$mixin_append': {
-      'args': ['--platform', 'iPhone X', '--version', '13.6'],
-      'swarming': {
-        'named_caches': [{
-          'name': 'runtime_ios_13_6',
-          'path': 'Runtime-ios-13.6'
-        }]
-      }
-    }
-  },
-  'ios-simulator-14.5': {
-    '$mixin_append': {
-      'args': ['--platform', 'iPhone X', '--version', '14.5'],
-      'swarming': {
-        'named_caches': [{
-          'name': 'runtime_ios_14_5',
-          'path': 'Runtime-ios-14.5'
-        }]
       }
     }
   },
@@ -201,7 +177,10 @@
       'args': ['--test-suite', 'fuchsia_perf_tests']
     },
     '$mixin_append': {
-      'args': ['--nologs']
+      'args': [
+        '--nologs',
+        '--isolated-script-test-perf-output=${ISOLATED_OUTDIR}/perftest-output.json'
+      ]
     }
   },
   'perf-low-bandwidth-audio-perf-test': {

@@ -626,6 +626,11 @@ void WebRtcVoiceEngine::StopAecDump() {
   }
 }
 
+absl::optional<webrtc::AudioDeviceModule::Stats>
+WebRtcVoiceEngine::GetAudioDeviceStats() {
+  return adm()->GetStats();
+}
+
 webrtc::AudioDeviceModule* WebRtcVoiceEngine::adm() {
   RTC_DCHECK_RUN_ON(&worker_thread_checker_);
   RTC_DCHECK(adm_);
@@ -1235,14 +1240,6 @@ class WebRtcVoiceMediaChannel::WebRtcAudioReceiveStream {
     return stream_->GetSources();
   }
 
-  webrtc::RtpParameters GetRtpParameters() const {
-    webrtc::RtpParameters rtp_parameters;
-    rtp_parameters.encodings.emplace_back();
-    rtp_parameters.encodings[0].ssrc = stream_->remote_ssrc();
-    rtp_parameters.header_extensions = stream_->GetRtpExtensions();
-    return rtp_parameters;
-  }
-
   void SetDepacketizerToDecoderFrameTransformer(
       rtc::scoped_refptr<webrtc::FrameTransformerInterface> frame_transformer) {
     RTC_DCHECK_RUN_ON(&worker_thread_checker_);
@@ -1456,7 +1453,9 @@ webrtc::RtpParameters WebRtcVoiceMediaChannel::GetRtpReceiveParameters(
         << ssrc << " which doesn't exist.";
     return webrtc::RtpParameters();
   }
-  rtp_params = it->second->GetRtpParameters();
+  rtp_params.encodings.emplace_back();
+  rtp_params.encodings.back().ssrc = it->second->stream().remote_ssrc();
+  rtp_params.header_extensions = recv_rtp_extensions_;
 
   for (const AudioCodec& codec : recv_codecs_) {
     rtp_params.codecs.push_back(codec.ToCodecParameters());

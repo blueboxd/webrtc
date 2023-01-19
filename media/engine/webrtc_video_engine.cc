@@ -1429,8 +1429,7 @@ bool WebRtcVideoChannel::RemoveSendStream(uint32_t ssrc) {
   RTC_LOG(LS_INFO) << "RemoveSendStream: " << ssrc;
 
   WebRtcVideoSendStream* removed_stream;
-  std::map<uint32_t, WebRtcVideoSendStream*>::iterator it =
-      send_streams_.find(ssrc);
+  auto it = send_streams_.find(ssrc);
   if (it == send_streams_.end()) {
     return false;
   }
@@ -1575,8 +1574,7 @@ bool WebRtcVideoChannel::RemoveRecvStream(uint32_t ssrc) {
   RTC_DCHECK_RUN_ON(&thread_checker_);
   RTC_LOG(LS_INFO) << "RemoveRecvStream: " << ssrc;
 
-  std::map<uint32_t, WebRtcVideoReceiveStream*>::iterator stream =
-      receive_streams_.find(ssrc);
+  auto stream = receive_streams_.find(ssrc);
   if (stream == receive_streams_.end()) {
     RTC_LOG(LS_ERROR) << "Stream not found for ssrc: " << ssrc;
     return false;
@@ -1637,8 +1635,7 @@ bool WebRtcVideoChannel::SetSink(
   RTC_LOG(LS_INFO) << "SetSink: ssrc:" << ssrc << " "
                    << (sink ? "(ptr)" : "nullptr");
 
-  std::map<uint32_t, WebRtcVideoReceiveStream*>::iterator it =
-      receive_streams_.find(ssrc);
+  auto it = receive_streams_.find(ssrc);
   if (it == receive_streams_.end()) {
     return false;
   }
@@ -1658,6 +1655,11 @@ bool WebRtcVideoChannel::GetSendStats(VideoMediaSendInfo* info) {
   RTC_DCHECK_RUN_ON(&thread_checker_);
   TRACE_EVENT0("webrtc", "WebRtcVideoChannel::GetSendStats");
 
+  info->Clear();
+  if (send_streams_.empty()) {
+    return true;
+  }
+
   // Log stats periodically.
   bool log_stats = false;
   int64_t now_ms = rtc::TimeMillis();
@@ -1667,7 +1669,6 @@ bool WebRtcVideoChannel::GetSendStats(VideoMediaSendInfo* info) {
     log_stats = true;
   }
 
-  info->Clear();
   FillSenderStats(info, log_stats);
   FillSendCodecStats(info);
   // TODO(holmer): We should either have rtt available as a metric on
@@ -1691,6 +1692,11 @@ bool WebRtcVideoChannel::GetReceiveStats(VideoMediaReceiveInfo* info) {
   RTC_DCHECK_RUN_ON(&thread_checker_);
   TRACE_EVENT0("webrtc", "WebRtcVideoChannel::GetReceiveStats");
 
+  info->Clear();
+  if (receive_streams_.empty()) {
+    return true;
+  }
+
   // Log stats periodically.
   bool log_stats = false;
   int64_t now_ms = rtc::TimeMillis();
@@ -1700,7 +1706,6 @@ bool WebRtcVideoChannel::GetReceiveStats(VideoMediaReceiveInfo* info) {
     log_stats = true;
   }
 
-  info->Clear();
   FillReceiverStats(info, log_stats);
   FillReceiveCodecStats(info);
 
@@ -1709,14 +1714,12 @@ bool WebRtcVideoChannel::GetReceiveStats(VideoMediaReceiveInfo* info) {
 
 void WebRtcVideoChannel::FillSenderStats(VideoMediaSendInfo* video_media_info,
                                          bool log_stats) {
-  for (std::map<uint32_t, WebRtcVideoSendStream*>::iterator it =
-           send_streams_.begin();
-       it != send_streams_.end(); ++it) {
-    auto infos = it->second->GetPerLayerVideoSenderInfos(log_stats);
+  for (const auto& it : send_streams_) {
+    auto infos = it.second->GetPerLayerVideoSenderInfos(log_stats);
     if (infos.empty())
       continue;
     video_media_info->aggregated_senders.push_back(
-        it->second->GetAggregatedVideoSenderInfo(infos));
+        it.second->GetAggregatedVideoSenderInfo(infos));
     for (auto&& info : infos) {
       video_media_info->senders.push_back(info);
     }
@@ -1726,39 +1729,45 @@ void WebRtcVideoChannel::FillSenderStats(VideoMediaSendInfo* video_media_info,
 void WebRtcVideoChannel::FillReceiverStats(
     VideoMediaReceiveInfo* video_media_info,
     bool log_stats) {
-  for (std::map<uint32_t, WebRtcVideoReceiveStream*>::iterator it =
-           receive_streams_.begin();
-       it != receive_streams_.end(); ++it) {
+  for (const auto& it : receive_streams_) {
     video_media_info->receivers.push_back(
-        it->second->GetVideoReceiverInfo(log_stats));
+        it.second->GetVideoReceiverInfo(log_stats));
   }
 }
 
 void WebRtcVideoChannel::FillBitrateInfo(BandwidthEstimationInfo* bwe_info) {
   RTC_DCHECK_RUN_ON(&thread_checker_);
-  for (std::map<uint32_t, WebRtcVideoSendStream*>::iterator stream =
-           send_streams_.begin();
-       stream != send_streams_.end(); ++stream) {
-    stream->second->FillBitrateInfo(bwe_info);
+  for (const auto& it : send_streams_) {
+    it.second->FillBitrateInfo(bwe_info);
   }
 }
 
 void WebRtcVideoChannel::FillSendCodecStats(
     VideoMediaSendInfo* video_media_info) {
-  for (const VideoCodec& codec : send_params_.codecs) {
-    webrtc::RtpCodecParameters codec_params = codec.ToCodecParameters();
-    video_media_info->send_codecs.insert(
-        std::make_pair(codec_params.payload_type, std::move(codec_params)));
+  RTC_DCHECK_RUN_ON(&thread_checker_);
+  if (!send_codec_) {
+    return;
   }
+  // Note: since RTP stats don't account for RTX and FEC separately (see
+  // https://w3c.github.io/webrtc-stats/#dom-rtcstatstype-outbound-rtp)
+  // we can omit the codec information for those here and only insert the
+  // primary codec that is being used to send here.
+  video_media_info->send_codecs.insert(std::make_pair(
+      send_codec_->codec.id, send_codec_->codec.ToCodecParameters()));
 }
 
 void WebRtcVideoChannel::FillReceiveCodecStats(
     VideoMediaReceiveInfo* video_media_info) {
-  // TODO(bugs.webrtc.org/14808): Don't copy codec info around - reference it.
-  for (const VideoCodec& codec : recv_params_.codecs) {
-    webrtc::RtpCodecParameters codec_params = codec.ToCodecParameters();
-    video_media_info->receive_codecs.insert(
-        std::make_pair(codec_params.payload_type, std::move(codec_params)));
+  for (const auto& receiver : video_media_info->receivers) {
+    auto codec =
+        absl::c_find_if(recv_params_.codecs, [&receiver](const VideoCodec& c) {
+          return receiver.codec_payload_type &&
+                 *receiver.codec_payload_type == c.id;
+        });
+    if (codec != recv_params_.codecs.end()) {
+      video_media_info->receive_codecs.insert(
+          std::make_pair(codec->id, codec->ToCodecParameters()));
+    }
   }
 }
 
@@ -2802,11 +2811,9 @@ void WebRtcVideoChannel::WebRtcVideoSendStream::FillBitrateInfo(
     return;
   }
   webrtc::VideoSendStream::Stats stats = stream_->GetStats();
-  for (std::map<uint32_t, webrtc::VideoSendStream::StreamStats>::iterator it =
-           stats.substreams.begin();
-       it != stats.substreams.end(); ++it) {
-    bwe_info->transmit_bitrate += it->second.total_bitrate_bps;
-    bwe_info->retransmit_bitrate += it->second.retransmit_bitrate_bps;
+  for (const auto& it : stats.substreams) {
+    bwe_info->transmit_bitrate += it.second.total_bitrate_bps;
+    bwe_info->retransmit_bitrate += it.second.retransmit_bitrate_bps;
   }
   bwe_info->target_enc_bitrate += stats.target_media_bitrate_bps;
   bwe_info->actual_enc_bitrate += stats.media_bitrate_bps;

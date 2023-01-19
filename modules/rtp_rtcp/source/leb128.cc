@@ -38,7 +38,7 @@ uint64_t ReadLeb128(const uint8_t*& read_at, const uint8_t* end) {
   // Read 9 bytes and didn't find the terminator byte. Check if 10th byte
   // is that terminator, however to fit result into uint64_t it may carry only
   // single bit.
-  if (*read_at <= 1) {
+  if (read_at != end && *read_at <= 1) {
     value |= uint64_t{*read_at} << fill_bits;
     ++read_at;
     return value;
