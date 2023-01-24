@@ -27,6 +27,7 @@
 #include "api/candidate.h"
 #include "api/dtls_transport_interface.h"
 #include "api/media_stream_interface.h"
+#include "api/media_types.h"
 #include "api/rtp_parameters.h"
 #include "api/sequence_checker.h"
 #include "api/stats/rtc_stats.h"
@@ -69,6 +70,8 @@ namespace {
 
 const char kDirectionInbound = 'I';
 const char kDirectionOutbound = 'O';
+
+const char* kAudioPlayoutSingletonId = "AP";
 
 // TODO(https://crbug.com/webrtc/10656): Consider making IDs less predictable.
 std::string RTCCertificateIDFromFingerprint(const std::string& fingerprint) {
@@ -518,7 +521,7 @@ std::unique_ptr<RTCAudioPlayoutStats> CreateAudioPlayoutStats(
     const AudioDeviceModule::Stats& audio_device_stats,
     webrtc::Timestamp timestamp) {
   auto stats = std::make_unique<RTCAudioPlayoutStats>(
-      /*id=*/"AP", timestamp);
+      /*id=*/kAudioPlayoutSingletonId, timestamp);
   stats->synthesized_samples_duration =
       audio_device_stats.synthesized_samples_duration_s;
   stats->synthesized_samples_events =
@@ -2017,6 +2020,12 @@ void RTCStatsCollector::ProduceAudioRTPStreamStats_n(
                                      .value());
       inbound_audio->track_identifier = audio_track->id();
     }
+    if (audio_device_stats_ && stats.media_type == cricket::MEDIA_TYPE_AUDIO &&
+        stats.current_direction &&
+        (*stats.current_direction == RtpTransceiverDirection::kSendRecv ||
+         *stats.current_direction == RtpTransceiverDirection::kRecvOnly)) {
+      inbound_audio->playout_id = kAudioPlayoutSingletonId;
+    }
     auto* inbound_audio_ptr = report->TryAddStats(std::move(inbound_audio));
     if (!inbound_audio_ptr) {
       RTC_LOG(LS_ERROR)
@@ -2200,16 +2209,17 @@ void RTCStatsCollector::ProduceTransportStats_n(
     // exist.
     const auto& certificate_stats_it =
         transport_cert_stats.find(transport_name);
+    std::string local_certificate_id, remote_certificate_id;
     RTC_DCHECK(certificate_stats_it != transport_cert_stats.cend());
-    std::string local_certificate_id;
-    if (certificate_stats_it->second.local) {
-      local_certificate_id = RTCCertificateIDFromFingerprint(
-          certificate_stats_it->second.local->fingerprint);
-    }
-    std::string remote_certificate_id;
-    if (certificate_stats_it->second.remote) {
-      remote_certificate_id = RTCCertificateIDFromFingerprint(
-          certificate_stats_it->second.remote->fingerprint);
+    if (certificate_stats_it != transport_cert_stats.cend()) {
+      if (certificate_stats_it->second.local) {
+        local_certificate_id = RTCCertificateIDFromFingerprint(
+            certificate_stats_it->second.local->fingerprint);
+      }
+      if (certificate_stats_it->second.remote) {
+        remote_certificate_id = RTCCertificateIDFromFingerprint(
+            certificate_stats_it->second.remote->fingerprint);
+      }
     }
 
     // There is one transport stats for each channel.
@@ -2477,6 +2487,10 @@ void RTCStatsCollector::PrepareTransceiverStatsInfosAndCallStats_s_w_n() {
     call_stats_ = pc_->GetCallStats();
     audio_device_stats_ = pc_->GetAudioDeviceStats();
   });
+
+  for (auto& stats : transceiver_stats_infos_) {
+    stats.current_direction = stats.transceiver->current_direction();
+  }
 }
 
 void RTCStatsCollector::OnSctpDataChannelCreated(SctpDataChannel* channel) {
