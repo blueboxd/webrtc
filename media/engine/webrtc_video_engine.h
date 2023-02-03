@@ -11,6 +11,7 @@
 #ifndef MEDIA_ENGINE_WEBRTC_VIDEO_ENGINE_H_
 #define MEDIA_ENGINE_WEBRTC_VIDEO_ENGINE_H_
 
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <set>
@@ -252,7 +253,7 @@ class WebRtcVideoChannel : public VideoMediaChannel,
     webrtc::UlpfecConfig ulpfec;
     int flexfec_payload_type;  // -1 if absent.
     int rtx_payload_type;      // -1 if absent.
-    int rtx_time;              // -1 if absent.
+    absl::optional<int> rtx_time;
   };
 
   struct ChangedSendParameters {
@@ -458,14 +459,15 @@ class WebRtcVideoChannel : public VideoMediaChannel,
 
     std::vector<webrtc::RtpSource> GetSources();
 
-    // Does not return codecs, they are filled by the owning WebRtcVideoChannel.
+    // Does not return codecs, nor header extensions,  they are filled by the
+    // owning WebRtcVideoChannel.
     webrtc::RtpParameters GetRtpParameters() const;
 
     // TODO(deadbeef): Move these feedback parameters into the recv parameters.
     void SetFeedbackParameters(bool lntf_enabled,
                                bool nack_enabled,
                                webrtc::RtcpMode rtcp_mode,
-                               int rtx_time);
+                               absl::optional<int> rtx_time);
     void SetRecvParameters(const ChangedRecvParameters& recv_params);
 
     void OnFrame(const webrtc::VideoFrame& frame) override;
@@ -492,6 +494,7 @@ class WebRtcVideoChannel : public VideoMediaChannel,
             frame_transformer);
 
     void SetLocalSsrc(uint32_t local_ssrc);
+    void UpdateRtxSsrc(uint32_t ssrc);
 
    private:
     // Attempts to reconfigure an already existing `flexfec_stream_`, create

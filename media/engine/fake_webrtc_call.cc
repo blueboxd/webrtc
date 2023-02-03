@@ -130,16 +130,6 @@ void FakeAudioReceiveStream::SetFrameDecryptor(
   config_.frame_decryptor = std::move(frame_decryptor);
 }
 
-void FakeAudioReceiveStream::SetRtpExtensions(
-    std::vector<webrtc::RtpExtension> extensions) {
-  config_.rtp.extensions = std::move(extensions);
-}
-
-webrtc::RtpHeaderExtensionMap FakeAudioReceiveStream::GetRtpExtensionMap()
-    const {
-  return webrtc::RtpHeaderExtensionMap(config_.rtp.extensions);
-}
-
 webrtc::AudioReceiveStreamInterface::Stats FakeAudioReceiveStream::GetStats(
     bool get_and_clear_legacy_stats) const {
   return stats_;
@@ -421,16 +411,6 @@ webrtc::VideoReceiveStreamInterface::Stats FakeVideoReceiveStream::GetStats()
   return stats_;
 }
 
-void FakeVideoReceiveStream::SetRtpExtensions(
-    std::vector<webrtc::RtpExtension> extensions) {
-  config_.rtp.extensions = std::move(extensions);
-}
-
-webrtc::RtpHeaderExtensionMap FakeVideoReceiveStream::GetRtpExtensionMap()
-    const {
-  return webrtc::RtpHeaderExtensionMap(config_.rtp.extensions);
-}
-
 void FakeVideoReceiveStream::Start() {
   receiving_ = true;
 }
@@ -447,16 +427,6 @@ void FakeVideoReceiveStream::SetStats(
 FakeFlexfecReceiveStream::FakeFlexfecReceiveStream(
     const webrtc::FlexfecReceiveStream::Config config)
     : config_(std::move(config)) {}
-
-void FakeFlexfecReceiveStream::SetRtpExtensions(
-    std::vector<webrtc::RtpExtension> extensions) {
-  config_.rtp.extensions = std::move(extensions);
-}
-
-webrtc::RtpHeaderExtensionMap FakeFlexfecReceiveStream::GetRtpExtensionMap()
-    const {
-  return webrtc::RtpHeaderExtensionMap(config_.rtp.extensions);
-}
 
 const webrtc::FlexfecReceiveStream::Config&
 FakeFlexfecReceiveStream::GetConfig() const {
@@ -665,21 +635,6 @@ webrtc::PacketReceiver* FakeCall::Receiver() {
   return this;
 }
 
-webrtc::PacketReceiver::DeliveryStatus FakeCall::DeliverPacket(
-    webrtc::MediaType media_type,
-    rtc::CopyOnWriteBuffer packet,
-    int64_t packet_time_us) {
-  RTC_DCHECK(webrtc::IsRtpPacket(packet));
-  uint32_t ssrc = ParseRtpSsrc(packet);
-  webrtc::Timestamp arrival_time =
-      packet_time_us > -1 ? webrtc::Timestamp::Micros(packet_time_us)
-                          : webrtc::Timestamp::Zero();
-  if (DeliverPacketInternal(media_type, ssrc, packet, arrival_time)) {
-    return DELIVERY_OK;
-  }
-  return DELIVERY_UNKNOWN_SSRC;
-}
-
 void FakeCall::DeliverRtpPacket(
     webrtc::MediaType media_type,
     webrtc::RtpPacketReceived packet,
@@ -705,7 +660,8 @@ bool FakeCall::DeliverPacketInternal(webrtc::MediaType media_type,
 
   if (media_type == webrtc::MediaType::VIDEO) {
     for (auto receiver : video_receive_streams_) {
-      if (receiver->GetConfig().rtp.remote_ssrc == ssrc) {
+      if (receiver->GetConfig().rtp.remote_ssrc == ssrc ||
+          receiver->GetConfig().rtp.rtx_ssrc == ssrc) {
         ++delivered_packets_by_ssrc_[ssrc];
         return true;
       }

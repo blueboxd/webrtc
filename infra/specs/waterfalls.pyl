@@ -67,8 +67,12 @@
       'Android64 Builder x64 (dbg)': {},
       'Fuchsia Builder': {},
       'Fuchsia Release': {
-        'os_type': 'linux',
-        'mixins': ['linux-bionic', 'x86-64', 'has_native_resultdb_integration'],
+        'os_type':
+        'linux',
+        'mixins': [
+          'linux-bionic', 'x86-64', 'fuchsia-gtest-output',
+          'resultdb-gtest-json-format'
+        ],
         'test_suites': {
           'isolated_scripts': 'fuchsia_compatible_tests',
         },
@@ -189,7 +193,7 @@
       'MacArm64 Builder': {},
       'Win (more configs)': {
         'os_type': 'win',
-        'mixins': ['win10', 'x86-64', 'resultdb-json-format'],
+        'mixins': ['win10-override', 'x86-64', 'resultdb-json-format'],
         'test_suites': {
           'isolated_scripts': 'more_configs_tests',
         },
@@ -198,21 +202,21 @@
       'Win32 Debug (Clang)': {},
       'Win32 Release (Clang)': {
         'os_type': 'win',
-        'mixins': ['win10', 'x86-64', 'resultdb-json-format'],
+        'mixins': ['win10-override', 'x86-64', 'resultdb-json-format'],
         'test_suites': {
           'isolated_scripts': 'desktop_tests',
         },
       },
       'Win64 ASan': {
         'os_type': 'win',
-        'mixins': ['win10', 'x86-64', 'resultdb-json-format'],
+        'mixins': ['win10-override', 'x86-64', 'resultdb-json-format'],
         'test_suites': {
           'isolated_scripts': 'desktop_tests',
         },
       },
       'Win64 Debug (Clang)': {
         'os_type': 'win',
-        'mixins': ['win10', 'x86-64', 'resultdb-json-format'],
+        'mixins': ['win10-override', 'x86-64', 'resultdb-json-format'],
         'test_suites': {
           'isolated_scripts': 'desktop_tests',
         },
@@ -239,7 +243,7 @@
   },
   {
     'name': 'client.webrtc.perf',
-    'mixins': [],
+    'mixins': ['limited-capacity'],
     'machines': {
       'Perf Android32 (O Pixel2)': {
         'mixins': [
@@ -284,7 +288,7 @@
         'linux',
         'mixins': [
           'linux-bionic', 'x86-64', 'perf-pool-vm', 'timeout-3h',
-          'has_native_resultdb_integration', 'chromium-tester-service-account'
+          'resultdb-gtest-json-format', 'fuchsia-gtest-output'
         ],
         'test_suites': {
           'isolated_scripts': 'fuchsia_compatible_perf_tests',
@@ -435,8 +439,12 @@
       'android_compile_x86_dbg': {},
       'android_compile_x86_rel': {},
       'fuchsia_rel': {
-        'os_type': 'linux',
-        'mixins': ['linux-bionic', 'x86-64', 'has_native_resultdb_integration'],
+        'os_type':
+        'linux',
+        'mixins': [
+          'linux-bionic', 'x86-64', 'fuchsia-gtest-output',
+          'resultdb-gtest-json-format'
+        ],
         'test_suites': {
           'isolated_scripts': 'fuchsia_compatible_tests',
         },
@@ -594,7 +602,7 @@
       },
       'win_asan': {
         'os_type': 'win',
-        'mixins': ['win10', 'x86-64', 'resultdb-json-format'],
+        'mixins': ['win10-override', 'x86-64', 'resultdb-json-format'],
         'test_suites': {
           'isolated_scripts': 'desktop_tests',
         },
@@ -605,35 +613,35 @@
       'win_compile_x86_clang_rel': {},
       'win_x64_clang_dbg': {
         'os_type': 'win',
-        'mixins': ['win10', 'x86-64', 'resultdb-json-format'],
+        'mixins': ['win10-override', 'x86-64', 'resultdb-json-format'],
         'test_suites': {
           'isolated_scripts': 'desktop_tests',
         },
       },
       'win_x64_clang_rel': {
         'os_type': 'win',
-        'mixins': ['win10', 'x86-64', 'resultdb-json-format'],
+        'mixins': ['win10-override', 'x86-64', 'resultdb-json-format'],
         'test_suites': {
           'isolated_scripts': 'desktop_tests',
         },
       },
       'win_x86_clang_dbg': {
         'os_type': 'win',
-        'mixins': ['win10', 'x86-64', 'resultdb-json-format'],
+        'mixins': ['win10-override', 'x86-64', 'resultdb-json-format'],
         'test_suites': {
           'isolated_scripts': 'desktop_tests',
         },
       },
       'win_x86_clang_rel': {
         'os_type': 'win',
-        'mixins': ['win10', 'x86-64', 'resultdb-json-format'],
+        'mixins': ['win10-override', 'x86-64', 'resultdb-json-format'],
         'test_suites': {
           'isolated_scripts': 'desktop_tests_tryserver',
         },
       },
       'win_x86_more_configs': {
         'os_type': 'win',
-        'mixins': ['win10', 'x86-64', 'resultdb-json-format'],
+        'mixins': ['win10-override', 'x86-64', 'resultdb-json-format'],
         'test_suites': {
           'isolated_scripts': 'more_configs_tests',
         },

@@ -117,6 +117,11 @@
   'isolate_profile_data': {
     'isolate_profile_data': True
   },
+  'limited-capacity': {
+    'swarming': {
+      'expiration': 10800
+    }
+  },
   'linux-bionic': {
     'swarming': {
       'dimensions': {
@@ -290,17 +295,17 @@
       'args': ['--xctest']
     }
   },
-  'win10': {
-    'swarming': {
-      'dimensions': {
-        'os': 'Windows-10-19042|Windows-10-19045'
-      }
-    }
-  },
   'win10-any': {
     'swarming': {
       'dimensions': {
         'os': 'Windows-10'
+      }
+    }
+  },
+  'win10-override': {
+    'swarming': {
+      'dimensions': {
+        'os': 'Windows-10-19042|Windows-10-19045'
       }
     }
   },
