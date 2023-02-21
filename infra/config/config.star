@@ -284,7 +284,7 @@ luci.bucket(
 luci.cq_group(
     name = "cq",
     tree_status_host = "webrtc-status.appspot.com",
-    watch = [cq.refset(repo = WEBRTC_GERRIT, refs = ["refs/heads/master", "refs/heads/main"])],
+    watch = [cq.refset(repo = WEBRTC_GERRIT, refs = ["refs/heads/main"])],
     acls = [
         acl.entry(acl.CQ_COMMITTER, groups = ["project-webrtc-committers"]),
         acl.entry(acl.CQ_DRY_RUNNER, groups = ["project-webrtc-tryjob-access"]),
@@ -405,8 +405,8 @@ recipe("lkgr_finder", pkg = "infra/recipe_bundles/chromium.googlesource.com/chro
 
 # Console definitions:
 
-luci.console_view(name = "ci", title = "Main", repo = WEBRTC_GIT, header = "console-header.textpb", refs = ["refs/heads/master", "refs/heads/main"])
-luci.console_view(name = "perf", title = "Perf", repo = WEBRTC_GIT, header = "console-header.textpb", refs = ["refs/heads/master", "refs/heads/main"])
+luci.console_view(name = "ci", title = "Main", repo = WEBRTC_GIT, header = "console-header.textpb", refs = ["refs/heads/main"])
+luci.console_view(name = "perf", title = "Perf", repo = WEBRTC_GIT, header = "console-header.textpb", refs = ["refs/heads/main"])
 luci.list_view(name = "cron", title = "Cron")
 luci.list_view(name = "try", title = "Tryserver")
 
@@ -752,7 +752,8 @@ linux_builder("Linux (more configs)", "Linux|x64|more")
 linux_try_job("linux_more_configs")
 linux_try_job("linux_chromium_compile", recipe = "chromium_trybot", branch_cq = False)
 linux_try_job("linux_chromium_compile_dbg", recipe = "chromium_trybot", branch_cq = False)
-linux_try_job("linux_coverage", cq = None)
+linux_try_job("linux_coverage")
+linux_try_job("webrtc_linux_chromium", recipe = "chromium_trybot", cq = None, branch_cq = False)
 
 linux_builder("Fuchsia Builder", ci_cat = None, perf_cat = "Fuchsia|x64|Builder|", prioritized = True)
 linux_builder("Fuchsia Release", "Fuchsia|x64|rel")
@@ -872,4 +873,6 @@ cron_builder(
         "config": lkgr_config,
     },
     schedule = "*/10 * * * *",  # Every 10 minutes.
+    # TODO(crbug.com/1393420): remove this.
+    experiments = {"luci.buildbucket.omit_python2": 0},
 )

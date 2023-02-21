@@ -71,37 +71,37 @@ class Pacer {
  public:
   explicit Pacer(PacingSettings settings)
       : settings_(settings), delay_(TimeDelta::Zero()) {}
-  TimeDelta Delay(Timestamp beat) {
+  Timestamp Schedule(Timestamp timestamp) {
+    Timestamp now = Timestamp::Micros(rtc::TimeMicros());
     if (settings_.mode == PacingMode::kNoPacing) {
-      return TimeDelta::Zero();
+      return now;
     }
 
-    Timestamp now = Timestamp::Micros(rtc::TimeMicros());
-    if (prev_time_.has_value()) {
-      delay_ += PacingTime(beat);
-      delay_ -= (now - *prev_time_);
-      if (delay_.ns() < 0) {
-        delay_ = TimeDelta::Zero();
+    Timestamp scheduled = now;
+    if (prev_scheduled_) {
+      scheduled = *prev_scheduled_ + PacingTime(timestamp);
+      if (scheduled < now) {
+        scheduled = now;
       }
     }
 
-    prev_beat_ = beat;
-    prev_time_ = now;
-    return delay_;
+    prev_timestamp_ = timestamp;
+    prev_scheduled_ = scheduled;
+    return scheduled;
   }
 
  private:
-  TimeDelta PacingTime(Timestamp beat) {
+  TimeDelta PacingTime(Timestamp timestamp) {
     if (settings_.mode == PacingMode::kRealTime) {
-      return beat - *prev_beat_;
+      return timestamp - *prev_timestamp_;
     }
     RTC_CHECK_EQ(PacingMode::kConstantRate, settings_.mode);
     return 1 / settings_.constant_rate;
   }
 
   PacingSettings settings_;
-  absl::optional<Timestamp> prev_beat_;
-  absl::optional<Timestamp> prev_time_;
+  absl::optional<Timestamp> prev_timestamp_;
+  absl::optional<Timestamp> prev_scheduled_;
   TimeDelta delay_;
 };
 
@@ -119,18 +119,20 @@ class LimitedTaskQueue {
   // task starts.
   static constexpr int kMaxTaskQueueSize = 3;
 
-  explicit LimitedTaskQueue(rtc::TaskQueue& task_queue)
-      : task_queue_(task_queue), queue_size_(0) {}
+  LimitedTaskQueue() : queue_size_(0) {}
 
-  void PostDelayedTask(absl::AnyInvocable<void() &&> task, TimeDelta delay) {
+  void PostScheduledTask(absl::AnyInvocable<void() &&> task, Timestamp start) {
     ++queue_size_;
-    task_queue_.PostDelayedTask(
-        [this, task = std::move(task)]() mutable {
-          std::move(task)();
-          --queue_size_;
-          task_executed_.Set();
-        },
-        delay);
+    task_queue_.PostTask([this, task = std::move(task), start]() mutable {
+      int wait_ms = static_cast<int>(start.ms() - rtc::TimeMillis());
+      if (wait_ms > 0) {
+        SleepMs(wait_ms);
+      }
+
+      std::move(task)();
+      --queue_size_;
+      task_executed_.Set();
+    });
 
     task_executed_.Reset();
     if (queue_size_ > kMaxTaskQueueSize) {
@@ -140,13 +142,10 @@ class LimitedTaskQueue {
   }
 
   void WaitForPreviouslyPostedTasks() {
-    while (queue_size_ > 0) {
-      task_executed_.Wait(rtc::Event::kForever);
-      task_executed_.Reset();
-    }
+    task_queue_.SendTask([] {});
   }
 
-  rtc::TaskQueue& task_queue_;
+  TaskQueueForTest task_queue_;
   std::atomic_int queue_size_;
   rtc::Event task_executed_;
 };
@@ -155,32 +154,34 @@ class TesterDecoder {
  public:
   TesterDecoder(Decoder* decoder,
                 VideoCodecAnalyzer* analyzer,
-                const DecoderSettings& settings,
-                rtc::TaskQueue& task_queue)
+                const DecoderSettings& settings)
       : decoder_(decoder),
         analyzer_(analyzer),
         settings_(settings),
-        pacer_(settings.pacing),
-        task_queue_(task_queue) {
+        pacer_(settings.pacing) {
     RTC_CHECK(analyzer_) << "Analyzer must be provided";
   }
 
   void Decode(const EncodedImage& frame) {
     Timestamp timestamp = Timestamp::Micros((frame.Timestamp() / k90kHz).us());
 
-    task_queue_.PostDelayedTask(
+    task_queue_.PostScheduledTask(
         [this, frame] {
           analyzer_->StartDecode(frame);
           decoder_->Decode(
               frame, [this, spatial_idx = frame.SpatialIndex().value_or(0)](
                          const VideoFrame& decoded_frame) {
-                this->analyzer_->FinishDecode(decoded_frame, spatial_idx);
+                analyzer_->FinishDecode(decoded_frame, spatial_idx);
               });
         },
-        pacer_.Delay(timestamp));
+        pacer_.Schedule(timestamp));
   }
 
-  void Flush() { task_queue_.WaitForPreviouslyPostedTasks(); }
+  void Flush() {
+    Timestamp now = Timestamp::Micros(rtc::TimeMicros());
+    task_queue_.PostScheduledTask([this] { decoder_->Flush(); }, now);
+    task_queue_.WaitForPreviouslyPostedTasks();
+  }
 
  protected:
   Decoder* const decoder_;
@@ -195,34 +196,36 @@ class TesterEncoder {
   TesterEncoder(Encoder* encoder,
                 TesterDecoder* decoder,
                 VideoCodecAnalyzer* analyzer,
-                const EncoderSettings& settings,
-                rtc::TaskQueue& task_queue)
+                const EncoderSettings& settings)
       : encoder_(encoder),
         decoder_(decoder),
         analyzer_(analyzer),
         settings_(settings),
-        pacer_(settings.pacing),
-        task_queue_(task_queue) {
+        pacer_(settings.pacing) {
     RTC_CHECK(analyzer_) << "Analyzer must be provided";
   }
 
   void Encode(const VideoFrame& frame) {
     Timestamp timestamp = Timestamp::Micros((frame.timestamp() / k90kHz).us());
 
-    task_queue_.PostDelayedTask(
+    task_queue_.PostScheduledTask(
         [this, frame] {
           analyzer_->StartEncode(frame);
           encoder_->Encode(frame, [this](const EncodedImage& encoded_frame) {
-            this->analyzer_->FinishEncode(encoded_frame);
+            analyzer_->FinishEncode(encoded_frame);
             if (decoder_ != nullptr) {
-              this->decoder_->Decode(encoded_frame);
+              decoder_->Decode(encoded_frame);
             }
           });
         },
-        pacer_.Delay(timestamp));
+        pacer_.Schedule(timestamp));
   }
 
-  void Flush() { task_queue_.WaitForPreviouslyPostedTasks(); }
+  void Flush() {
+    Timestamp now = Timestamp::Micros(rtc::TimeMicros());
+    task_queue_.PostScheduledTask([this] { encoder_->Flush(); }, now);
+    task_queue_.WaitForPreviouslyPostedTasks();
+  }
 
  protected:
   Encoder* const encoder_;
@@ -235,29 +238,12 @@ class TesterEncoder {
 
 }  // namespace
 
-VideoCodecTesterImpl::VideoCodecTesterImpl()
-    : VideoCodecTesterImpl(/*task_queue_factory=*/nullptr) {}
-
-VideoCodecTesterImpl::VideoCodecTesterImpl(TaskQueueFactory* task_queue_factory)
-    : task_queue_factory_(task_queue_factory) {
-  if (task_queue_factory_ == nullptr) {
-    owned_task_queue_factory_ = CreateDefaultTaskQueueFactory();
-    task_queue_factory_ = owned_task_queue_factory_.get();
-  }
-}
-
 std::unique_ptr<VideoCodecStats> VideoCodecTesterImpl::RunDecodeTest(
     CodedVideoSource* video_source,
     Decoder* decoder,
     const DecoderSettings& decoder_settings) {
-  rtc::TaskQueue analyser_task_queue(task_queue_factory_->CreateTaskQueue(
-      "Analyzer", TaskQueueFactory::Priority::NORMAL));
-  rtc::TaskQueue decoder_task_queue(task_queue_factory_->CreateTaskQueue(
-      "Decoder", TaskQueueFactory::Priority::NORMAL));
-
-  VideoCodecAnalyzer perf_analyzer(analyser_task_queue);
-  TesterDecoder tester_decoder(decoder, &perf_analyzer, decoder_settings,
-                               decoder_task_queue);
+  VideoCodecAnalyzer perf_analyzer;
+  TesterDecoder tester_decoder(decoder, &perf_analyzer, decoder_settings);
 
   while (auto frame = video_source->PullFrame()) {
     tester_decoder.Decode(*frame);
@@ -272,15 +258,10 @@ std::unique_ptr<VideoCodecStats> VideoCodecTesterImpl::RunEncodeTest(
     RawVideoSource* video_source,
     Encoder* encoder,
     const EncoderSettings& encoder_settings) {
-  rtc::TaskQueue analyser_task_queue(task_queue_factory_->CreateTaskQueue(
-      "Analyzer", TaskQueueFactory::Priority::NORMAL));
-  rtc::TaskQueue encoder_task_queue(task_queue_factory_->CreateTaskQueue(
-      "Encoder", TaskQueueFactory::Priority::NORMAL));
-
   SyncRawVideoSource sync_source(video_source);
-  VideoCodecAnalyzer perf_analyzer(analyser_task_queue);
+  VideoCodecAnalyzer perf_analyzer;
   TesterEncoder tester_encoder(encoder, /*decoder=*/nullptr, &perf_analyzer,
-                               encoder_settings, encoder_task_queue);
+                               encoder_settings);
 
   while (auto frame = sync_source.PullFrame()) {
     tester_encoder.Encode(*frame);
@@ -297,19 +278,11 @@ std::unique_ptr<VideoCodecStats> VideoCodecTesterImpl::RunEncodeDecodeTest(
     Decoder* decoder,
     const EncoderSettings& encoder_settings,
     const DecoderSettings& decoder_settings) {
-  rtc::TaskQueue analyser_task_queue(task_queue_factory_->CreateTaskQueue(
-      "Analyzer", TaskQueueFactory::Priority::NORMAL));
-  rtc::TaskQueue decoder_task_queue(task_queue_factory_->CreateTaskQueue(
-      "Decoder", TaskQueueFactory::Priority::NORMAL));
-  rtc::TaskQueue encoder_task_queue(task_queue_factory_->CreateTaskQueue(
-      "Encoder", TaskQueueFactory::Priority::NORMAL));
-
   SyncRawVideoSource sync_source(video_source);
-  VideoCodecAnalyzer perf_analyzer(analyser_task_queue, &sync_source);
-  TesterDecoder tester_decoder(decoder, &perf_analyzer, decoder_settings,
-                               decoder_task_queue);
+  VideoCodecAnalyzer perf_analyzer(&sync_source);
+  TesterDecoder tester_decoder(decoder, &perf_analyzer, decoder_settings);
   TesterEncoder tester_encoder(encoder, &tester_decoder, &perf_analyzer,
-                               encoder_settings, encoder_task_queue);
+                               encoder_settings);
 
   while (auto frame = sync_source.PullFrame()) {
     tester_encoder.Encode(*frame);
