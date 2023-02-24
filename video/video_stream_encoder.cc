@@ -1063,19 +1063,21 @@ void VideoStreamEncoder::ReconfigureEncoder() {
     if (qp_untrusted_bitrate_limit) {
       // bandwidth_quality_scaler is only used for singlecast.
       if (streams.size() == 1 && encoder_config_.simulcast_layers.size() == 1) {
-        streams.back().min_bitrate_bps =
-            qp_untrusted_bitrate_limit->min_bitrate_bps;
-        streams.back().max_bitrate_bps =
-            qp_untrusted_bitrate_limit->max_bitrate_bps;
+        VideoStream& stream = streams.back();
+        stream.max_bitrate_bps =
+            std::min(stream.max_bitrate_bps,
+                     qp_untrusted_bitrate_limit->max_bitrate_bps);
+        stream.min_bitrate_bps =
+            std::min(stream.max_bitrate_bps,
+                     qp_untrusted_bitrate_limit->min_bitrate_bps);
         // If it is screen share mode, the minimum value of max_bitrate should
         // be greater than/equal to 1200kbps.
         if (encoder_config_.content_type ==
             VideoEncoderConfig::ContentType::kScreen) {
-          streams.back().max_bitrate_bps = std::max(
-              streams.back().max_bitrate_bps, kDefaultMinScreenSharebps);
+          stream.max_bitrate_bps =
+              std::max(stream.max_bitrate_bps, kDefaultMinScreenSharebps);
         }
-        streams.back().target_bitrate_bps =
-            qp_untrusted_bitrate_limit->max_bitrate_bps;
+        stream.target_bitrate_bps = stream.max_bitrate_bps;
       }
     }
   } else {
@@ -1498,6 +1500,11 @@ void VideoStreamEncoder::OnFrame(Timestamp post_time,
   const int kMsToRtpTimestamp = 90;
   incoming_frame.set_timestamp(
       kMsToRtpTimestamp * static_cast<uint32_t>(incoming_frame.ntp_time_ms()));
+
+  // Identifier should remain the same for newly produced incoming frame and the
+  // received |video_frame|.
+  incoming_frame.set_capture_time_identifier(
+      video_frame.capture_time_identifier());
 
   if (incoming_frame.ntp_time_ms() <= last_captured_timestamp_) {
     // We don't allow the same capture time for two frames, drop this one.
@@ -1960,6 +1967,8 @@ void VideoStreamEncoder::EncodeVideoFrame(const VideoFrame& video_frame,
     out_frame.set_video_frame_buffer(cropped_buffer);
     out_frame.set_update_rect(update_rect);
     out_frame.set_ntp_time_ms(video_frame.ntp_time_ms());
+    out_frame.set_capture_time_identifier(
+        video_frame.capture_time_identifier());
     // Since accumulated_update_rect_ is constructed before cropping,
     // we can't trust it. If any changes were pending, we invalidate whole
     // frame here.
@@ -2432,8 +2441,13 @@ void VideoStreamEncoder::RunPostEncode(const EncodedImage& encoded_image,
   stream_resource_manager_.OnEncodeCompleted(encoded_image, time_sent_us,
                                              encode_duration_us, frame_size);
   if (bitrate_adjuster_) {
-    bitrate_adjuster_->OnEncodedFrame(
-        frame_size, encoded_image.SpatialIndex().value_or(0), temporal_index);
+    // We could either have simulcast layers or spatial layers.
+    // TODO(https://crbug.com/webrtc/14891): If we want to support a mix of
+    // simulcast and SVC we'll also need to consider the case where we have both
+    // simulcast and spatial indices.
+    int stream_index = encoded_image.SpatialIndex().value_or(
+        encoded_image.SimulcastIndex().value_or(0));
+    bitrate_adjuster_->OnEncodedFrame(frame_size, stream_index, temporal_index);
   }
 }
 

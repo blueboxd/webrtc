@@ -231,6 +231,39 @@ class WebRtcVideoChannel : public VideoMediaChannel,
       rtc::scoped_refptr<webrtc::FrameTransformerInterface> frame_transformer)
       override;
 
+  // Information queries to support SetReceiverFeedbackParameters
+  webrtc::RtcpMode SendCodecRtcpMode() const override {
+    RTC_DCHECK_RUN_ON(&thread_checker_);
+    return send_params_.rtcp.reduced_size ? webrtc::RtcpMode::kReducedSize
+                                          : webrtc::RtcpMode::kCompound;
+  }
+
+  bool SendCodecHasLntf() const override {
+    RTC_DCHECK_RUN_ON(&thread_checker_);
+    if (!send_codec_) {
+      return false;
+    }
+    return HasLntf(send_codec_->codec);
+  }
+  bool SendCodecHasNack() const override {
+    RTC_DCHECK_RUN_ON(&thread_checker_);
+    if (!send_codec_) {
+      return false;
+    }
+    return HasNack(send_codec_->codec);
+  }
+  absl::optional<int> SendCodecRtxTime() const override {
+    RTC_DCHECK_RUN_ON(&thread_checker_);
+    if (!send_codec_) {
+      return absl::nullopt;
+    }
+    return send_codec_->rtx_time;
+  }
+  void SetReceiverFeedbackParameters(bool lntf_enabled,
+                                     bool nack_enabled,
+                                     webrtc::RtcpMode rtcp_mode,
+                                     absl::optional<int> rtx_time) override;
+
  private:
   class WebRtcVideoReceiveStream;
 
@@ -640,7 +673,8 @@ class WebRtcVideoChannel : public VideoMediaChannel,
   VideoSendParameters send_params_ RTC_GUARDED_BY(thread_checker_);
   VideoOptions default_send_options_ RTC_GUARDED_BY(thread_checker_);
   VideoRecvParameters recv_params_ RTC_GUARDED_BY(thread_checker_);
-  int64_t last_stats_log_ms_ RTC_GUARDED_BY(thread_checker_);
+  int64_t last_send_stats_log_ms_ RTC_GUARDED_BY(thread_checker_);
+  int64_t last_receive_stats_log_ms_ RTC_GUARDED_BY(thread_checker_);
   const bool discard_unknown_ssrc_packets_ RTC_GUARDED_BY(thread_checker_);
   // This is a stream param that comes from the remote description, but wasn't
   // signaled with any a=ssrc lines. It holds information that was signaled
