@@ -65,6 +65,17 @@ if (!build_with_chromium) {
   }
 }
 
+rtc_library("location") {
+  visibility = [ "*" ]
+  deps = [ "../rtc_base/system:rtc_export" ]
+  if (build_with_chromium) {
+    sources = [ "../../webrtc_overrides/api/location.h" ]
+    deps += [ "//base" ]
+  } else {
+    sources = [ "location.h" ]
+  }
+}
+
 rtc_library("rtp_headers") {
   visibility = [ "*" ]
   sources = [
@@ -1437,6 +1448,7 @@ if (rtc_include_tests) {
       "units:units_unittests",
       "video:frame_buffer_unittest",
       "video:rtp_video_frame_assembler_unittests",
+      "video:video_frame_metadata_unittest",
     ]
     absl_deps = [
       "//third_party/abseil-cpp/absl/strings",
@@ -1488,6 +1500,7 @@ rtc_source_set("field_trials_registry") {
     ":field_trials_view",
     "../experiments:registered_field_trials",
     "../rtc_base:checks",
+    "../rtc_base:logging",
     "../rtc_base/containers:flat_set",
     "../rtc_base/system:rtc_export",
   ]
