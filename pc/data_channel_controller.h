@@ -18,6 +18,7 @@
 #include "api/rtc_error.h"
 #include "api/scoped_refptr.h"
 #include "api/sequence_checker.h"
+#include "api/task_queue/pending_task_safety_flag.h"
 #include "api/transport/data_channel_transport_interface.h"
 #include "media/base/media_channel.h"
 #include "pc/data_channel_utils.h"
@@ -57,6 +58,8 @@ class DataChannelController : public SctpDataChannelControllerInterface,
   void AddSctpDataStream(int sid) override;
   void RemoveSctpDataStream(int sid) override;
   bool ReadyToSendData() const override;
+  void OnChannelStateChanged(SctpDataChannel* channel,
+                             DataChannelInterface::DataState state) override;
 
   // Implements DataChannelSink.
   void OnDataReceived(int channel_id,
@@ -99,10 +102,6 @@ class DataChannelController : public SctpDataChannelControllerInterface,
   DataChannelTransportInterface* data_channel_transport() const;
   void set_data_channel_transport(DataChannelTransportInterface* transport);
 
-  sigslot::signal1<SctpDataChannel*>& SignalSctpDataChannelCreated() {
-    RTC_DCHECK_RUN_ON(signaling_thread());
-    return SignalSctpDataChannelCreated_;
-  }
   // Called when the transport for the data channels is closed or destroyed.
   void OnTransportChannelClosed(RTCError error);
 
@@ -115,10 +114,10 @@ class DataChannelController : public SctpDataChannelControllerInterface,
           config) /* RTC_RUN_ON(signaling_thread()) */;
 
   // Parses and handles open messages.  Returns true if the message is an open
-  // message, false otherwise.
-  bool HandleOpenMessage_s(const cricket::ReceiveDataParams& params,
+  // message and should be considered to be handled, false otherwise.
+  bool HandleOpenMessage_n(const cricket::ReceiveDataParams& params,
                            const rtc::CopyOnWriteBuffer& buffer)
-      RTC_RUN_ON(signaling_thread());
+      RTC_RUN_ON(network_thread());
   // Called when a valid data channel OPEN message is received.
   void OnDataChannelOpenMessage(const std::string& label,
                                 const InternalDataChannelInit& config)
@@ -169,14 +168,12 @@ class DataChannelController : public SctpDataChannelControllerInterface,
   sigslot::signal1<int> SignalDataChannelTransportChannelClosed_s
       RTC_GUARDED_BY(signaling_thread());
 
-  sigslot::signal1<SctpDataChannel*> SignalSctpDataChannelCreated_
-      RTC_GUARDED_BY(signaling_thread());
-
   // Owning PeerConnection.
   PeerConnectionInternal* const pc_;
   // The weak pointers must be dereferenced and invalidated on the signalling
   // thread only.
   rtc::WeakPtrFactory<DataChannelController> weak_factory_{this};
+  ScopedTaskSafety signaling_safety_;
 };
 
 }  // namespace webrtc

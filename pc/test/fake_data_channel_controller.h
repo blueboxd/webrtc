@@ -15,6 +15,7 @@
 
 #include "pc/sctp_data_channel.h"
 #include "rtc_base/checks.h"
+#include "rtc_base/weak_ptr.h"
 
 class FakeDataChannelController
     : public webrtc::SctpDataChannelControllerInterface {
@@ -25,6 +26,10 @@ class FakeDataChannelController
         ready_to_send_(false),
         transport_error_(false) {}
   virtual ~FakeDataChannelController() {}
+
+  rtc::WeakPtr<FakeDataChannelController> weak_ptr() {
+    return weak_factory_.GetWeakPtr();
+  }
 
   bool SendData(int sid,
                 const webrtc::SendDataParams& params,
@@ -53,7 +58,7 @@ class FakeDataChannelController
     if (!transport_available_) {
       return false;
     }
-    RTC_LOG(LS_INFO) << "DataChannel connected " << data_channel;
+    RTC_LOG(LS_VERBOSE) << "DataChannel connected " << data_channel;
     connected_channels_.insert(data_channel);
     return true;
   }
@@ -61,7 +66,7 @@ class FakeDataChannelController
   void DisconnectDataChannel(webrtc::SctpDataChannel* data_channel) override {
     RTC_CHECK(connected_channels_.find(data_channel) !=
               connected_channels_.end());
-    RTC_LOG(LS_INFO) << "DataChannel disconnected " << data_channel;
+    RTC_LOG(LS_VERBOSE) << "DataChannel disconnected " << data_channel;
     connected_channels_.erase(data_channel);
   }
 
@@ -89,6 +94,16 @@ class FakeDataChannelController
   }
 
   bool ReadyToSendData() const override { return ready_to_send_; }
+
+  void OnChannelStateChanged(
+      webrtc::SctpDataChannel* data_channel,
+      webrtc::DataChannelInterface::DataState state) override {
+    if (state == webrtc::DataChannelInterface::DataState::kOpen) {
+      ++channels_opened_;
+    } else if (state == webrtc::DataChannelInterface::DataState::kClosed) {
+      ++channels_closed_;
+    }
+  }
 
   // Set true to emulate the SCTP stream being blocked by congestion control.
   void set_send_blocked(bool blocked) {
@@ -146,6 +161,9 @@ class FakeDataChannelController
     return recv_ssrcs_.find(stream) != recv_ssrcs_.end();
   }
 
+  int channels_opened() const { return channels_opened_; }
+  int channels_closed() const { return channels_closed_; }
+
  private:
   int last_sid_;
   webrtc::SendDataParams last_send_data_params_;
@@ -153,8 +171,11 @@ class FakeDataChannelController
   bool transport_available_;
   bool ready_to_send_;
   bool transport_error_;
+  int channels_closed_ = 0;
+  int channels_opened_ = 0;
   std::set<webrtc::SctpDataChannel*> connected_channels_;
   std::set<uint32_t> send_ssrcs_;
   std::set<uint32_t> recv_ssrcs_;
+  rtc::WeakPtrFactory<FakeDataChannelController> weak_factory_{this};
 };
 #endif  // PC_TEST_FAKE_DATA_CHANNEL_CONTROLLER_H_

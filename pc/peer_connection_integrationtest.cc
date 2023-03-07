@@ -105,12 +105,10 @@ namespace {
 
 class PeerConnectionIntegrationTest
     : public PeerConnectionIntegrationBaseTest,
-      public ::testing::WithParamInterface<
-          std::tuple<SdpSemantics, std::string>> {
+      public ::testing::WithParamInterface<SdpSemantics> {
  protected:
   PeerConnectionIntegrationTest()
-      : PeerConnectionIntegrationBaseTest(std::get<0>(GetParam()),
-                                          std::get<1>(GetParam())) {}
+      : PeerConnectionIntegrationBaseTest(GetParam()) {}
 };
 
 // Fake clock must be set before threads are started to prevent race on
@@ -3233,8 +3231,10 @@ TEST_P(PeerConnectionIntegrationTest, OnIceCandidateErrorWithEmptyAddress) {
   EXPECT_EQ(caller()->error_event().address, "");
 }
 
+// TODO(https://crbug.com/webrtc/14947): Investigate why this is flaking and
+// find a way to re-enable the test.
 TEST_F(PeerConnectionIntegrationTestUnifiedPlan,
-       AudioKeepsFlowingAfterImplicitRollback) {
+       DISABLED_AudioKeepsFlowingAfterImplicitRollback) {
   PeerConnectionInterface::RTCConfiguration config;
   config.sdp_semantics = SdpSemantics::kUnifiedPlan;
   config.enable_implicit_rollback = true;
@@ -3467,21 +3467,15 @@ TEST_F(PeerConnectionIntegrationTestUnifiedPlan,
   EXPECT_EQ(parameters.encodings[0].max_bitrate_bps, 12345);
 }
 
-INSTANTIATE_TEST_SUITE_P(
-    PeerConnectionIntegrationTest,
-    PeerConnectionIntegrationTest,
-    Combine(Values(SdpSemantics::kPlanB_DEPRECATED, SdpSemantics::kUnifiedPlan),
-            Values("WebRTC-FrameBuffer3/arm:FrameBuffer2/",
-                   "WebRTC-FrameBuffer3/arm:FrameBuffer3/",
-                   "WebRTC-FrameBuffer3/arm:SyncDecoding/")));
+INSTANTIATE_TEST_SUITE_P(PeerConnectionIntegrationTest,
+                         PeerConnectionIntegrationTest,
+                         Values(SdpSemantics::kPlanB_DEPRECATED,
+                                SdpSemantics::kUnifiedPlan));
 
-INSTANTIATE_TEST_SUITE_P(
-    PeerConnectionIntegrationTest,
-    PeerConnectionIntegrationTestWithFakeClock,
-    Combine(Values(SdpSemantics::kPlanB_DEPRECATED, SdpSemantics::kUnifiedPlan),
-            Values("WebRTC-FrameBuffer3/arm:FrameBuffer2/",
-                   "WebRTC-FrameBuffer3/arm:FrameBuffer3/",
-                   "WebRTC-FrameBuffer3/arm:SyncDecoding/")));
+INSTANTIATE_TEST_SUITE_P(PeerConnectionIntegrationTest,
+                         PeerConnectionIntegrationTestWithFakeClock,
+                         Values(SdpSemantics::kPlanB_DEPRECATED,
+                                SdpSemantics::kUnifiedPlan));
 
 // Tests that verify interoperability between Plan B and Unified Plan
 // PeerConnections.

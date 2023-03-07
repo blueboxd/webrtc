@@ -30,6 +30,7 @@
 #include "rtc_base/third_party/sigslot/sigslot.h"
 #include "rtc_base/thread.h"
 #include "rtc_base/thread_annotations.h"
+#include "rtc_base/weak_ptr.h"
 
 namespace webrtc {
 
@@ -55,6 +56,9 @@ class SctpDataChannelControllerInterface {
   virtual void RemoveSctpDataStream(int sid) = 0;
   // Returns true if the transport channel is ready to send data.
   virtual bool ReadyToSendData() const = 0;
+  // Notifies the controller of state changes.
+  virtual void OnChannelStateChanged(SctpDataChannel* data_channel,
+                                     DataChannelInterface::DataState state) = 0;
 
  protected:
   virtual ~SctpDataChannelControllerInterface() {}
@@ -67,6 +71,11 @@ struct InternalDataChannelInit : public DataChannelInit {
   // The default role is kOpener because the default `negotiated` is false.
   InternalDataChannelInit() : open_handshake_role(kOpener) {}
   explicit InternalDataChannelInit(const DataChannelInit& base);
+
+  // Does basic validation to determine if a data channel instance can be
+  // constructed using the configuration.
+  bool IsValid() const;
+
   OpenHandshakeRole open_handshake_role;
 };
 
@@ -120,7 +129,7 @@ class SctpDataChannel : public DataChannelInterface,
                         public sigslot::has_slots<> {
  public:
   static rtc::scoped_refptr<SctpDataChannel> Create(
-      SctpDataChannelControllerInterface* controller,
+      rtc::WeakPtr<SctpDataChannelControllerInterface> controller,
       const std::string& label,
       const InternalDataChannelInit& config,
       rtc::Thread* signaling_thread,
@@ -130,9 +139,6 @@ class SctpDataChannel : public DataChannelInterface,
   // handed out to external callers.
   static rtc::scoped_refptr<DataChannelInterface> CreateProxy(
       rtc::scoped_refptr<SctpDataChannel> channel);
-
-  // Invalidate the link to the controller (DataChannelController);
-  void DetachFromController();
 
   void RegisterObserver(DataChannelObserver* observer) override;
   void UnregisterObserver() override;
@@ -214,19 +220,13 @@ class SctpDataChannel : public DataChannelInterface,
 
   DataChannelStats GetStats() const;
 
-  // Emitted when state transitions to kOpen.
-  sigslot::signal1<DataChannelInterface*> SignalOpened;
-  // Emitted when state transitions to kClosed.
-  // This signal can be used to tell when the channel's sid is free.
-  sigslot::signal1<DataChannelInterface*> SignalClosed;
-
   // Reset the allocator for internal ID values for testing, so that
   // the internal IDs generated are predictable. Test only.
   static void ResetInternalIdAllocatorForTesting(int new_value);
 
  protected:
   SctpDataChannel(const InternalDataChannelInit& config,
-                  SctpDataChannelControllerInterface* client,
+                  rtc::WeakPtr<SctpDataChannelControllerInterface> controller,
                   const std::string& label,
                   rtc::Thread* signaling_thread,
                   rtc::Thread* network_thread);
@@ -242,7 +242,7 @@ class SctpDataChannel : public DataChannelInterface,
     kHandshakeReady
   };
 
-  bool Init();
+  void Init();
   void UpdateState();
   void SetState(DataState state);
   void DisconnectFromTransport();
@@ -269,9 +269,8 @@ class SctpDataChannel : public DataChannelInterface,
   uint64_t bytes_sent_ RTC_GUARDED_BY(signaling_thread_) = 0;
   uint32_t messages_received_ RTC_GUARDED_BY(signaling_thread_) = 0;
   uint64_t bytes_received_ RTC_GUARDED_BY(signaling_thread_) = 0;
-  SctpDataChannelControllerInterface* const controller_
+  rtc::WeakPtr<SctpDataChannelControllerInterface> controller_
       RTC_GUARDED_BY(signaling_thread_);
-  bool controller_detached_ RTC_GUARDED_BY(signaling_thread_) = false;
   HandshakeState handshake_state_ RTC_GUARDED_BY(signaling_thread_) =
       kHandshakeInit;
   bool connected_to_transport_ RTC_GUARDED_BY(signaling_thread_) = false;

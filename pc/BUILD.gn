@@ -883,6 +883,7 @@ rtc_library("sctp_data_channel") {
     "../rtc_base:ssl",
     "../rtc_base:threading",
     "../rtc_base:threading",
+    "../rtc_base:weak_ptr",
     "../rtc_base/system:unused",
     "../rtc_base/third_party/sigslot:sigslot",
   ]
@@ -955,6 +956,7 @@ rtc_source_set("data_channel_controller") {
     "../api:rtc_error",
     "../api:scoped_refptr",
     "../api:sequence_checker",
+    "../api/task_queue:pending_task_safety_flag",
     "../api/transport:datagram_transport_interface",
     "../media:media_channel",
     "../media:rtc_media_base",
@@ -1062,8 +1064,8 @@ rtc_source_set("rtc_stats_collector") {
     "../rtc_base:stringutils",
     "../rtc_base:threading",
     "../rtc_base:timeutils",
+    "../rtc_base/containers:flat_set",
     "../rtc_base/synchronization:mutex",
-    "../rtc_base/third_party/sigslot:sigslot",
   ]
   absl_deps = [
     "//third_party/abseil-cpp/absl/functional:bind_front",
@@ -2542,6 +2544,27 @@ if (rtc_include_tests && !build_with_chromium) {
     ]
   }
 
+  rtc_test("peer_connection_mediachannel_split_unittests") {
+    testonly = true
+    sources = [ "peer_connection_mediachannel_split_unittest.cc" ]
+    deps = [
+      ":integration_test_helpers",
+      ":session_description",
+      "../api:libjingle_peerconnection_api",
+      "../api:media_stream_interface",
+      "../api:rtc_error",
+      "../api:rtc_stats_api",
+      "../api:scoped_refptr",
+      "../media:codec",
+      "../media:media_constants",
+      "../rtc_base:gunit_helpers",
+      "../rtc_base:rtc_base_tests_utils",
+      "../test:test_main",
+      "../test:test_support",
+    ]
+    absl_deps = [ "//third_party/abseil-cpp/absl/types:optional" ]
+  }
+
   rtc_library("data_channel_controller_unittest") {
     testonly = true
     sources = [ "data_channel_controller_unittest.cc" ]
@@ -2784,6 +2807,7 @@ if (rtc_include_tests && !build_with_chromium) {
       "../rtc_base:task_queue_for_test",
       "../rtc_base:threading",
       "../rtc_base:timeutils",
+      "../rtc_base:weak_ptr",
       "../rtc_base/synchronization:mutex",
       "../rtc_base/task_utils:repeating_task",
       "../rtc_base/third_party/sigslot",
