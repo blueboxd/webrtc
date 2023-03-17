@@ -20,13 +20,11 @@
 #include "api/sequence_checker.h"
 #include "api/task_queue/pending_task_safety_flag.h"
 #include "api/transport/data_channel_transport_interface.h"
-#include "media/base/media_channel.h"
 #include "pc/data_channel_utils.h"
 #include "pc/sctp_data_channel.h"
 #include "rtc_base/checks.h"
 #include "rtc_base/copy_on_write_buffer.h"
 #include "rtc_base/ssl_stream_adapter.h"
-#include "rtc_base/third_party/sigslot/sigslot.h"
 #include "rtc_base/thread.h"
 #include "rtc_base/thread_annotations.h"
 #include "rtc_base/weak_ptr.h"
@@ -54,7 +52,6 @@ class DataChannelController : public SctpDataChannelControllerInterface,
                 const rtc::CopyOnWriteBuffer& payload,
                 cricket::SendDataResult* result) override;
   bool ConnectDataChannel(SctpDataChannel* webrtc_data_channel) override;
-  void DisconnectDataChannel(SctpDataChannel* webrtc_data_channel) override;
   void AddSctpDataStream(int sid) override;
   void RemoveSctpDataStream(int sid) override;
   bool ReadyToSendData() const override;
@@ -92,7 +89,10 @@ class DataChannelController : public SctpDataChannelControllerInterface,
   void AllocateSctpSids(rtc::SSLRole role);
 
   // Checks if any data channel has been added.
+  // A data channel currently exist.
   bool HasDataChannels() const;
+  // At some point in time, a data channel has existed.
+  bool HasUsedDataChannels() const;
   bool HasSctpDataChannels() const {
     RTC_DCHECK_RUN_ON(signaling_thread());
     return !sctp_data_channels_.empty();
@@ -115,7 +115,8 @@ class DataChannelController : public SctpDataChannelControllerInterface,
 
   // Parses and handles open messages.  Returns true if the message is an open
   // message and should be considered to be handled, false otherwise.
-  bool HandleOpenMessage_n(const cricket::ReceiveDataParams& params,
+  bool HandleOpenMessage_n(int channel_id,
+                           DataMessageType type,
                            const rtc::CopyOnWriteBuffer& buffer)
       RTC_RUN_ON(network_thread());
   // Called when a valid data channel OPEN message is received.
@@ -150,23 +151,7 @@ class DataChannelController : public SctpDataChannelControllerInterface,
   SctpSidAllocator sid_allocator_ /* RTC_GUARDED_BY(signaling_thread()) */;
   std::vector<rtc::scoped_refptr<SctpDataChannel>> sctp_data_channels_
       RTC_GUARDED_BY(signaling_thread());
-  std::vector<rtc::scoped_refptr<SctpDataChannel>> sctp_data_channels_to_free_
-      RTC_GUARDED_BY(signaling_thread());
-
-  // Signals from `data_channel_transport_`.  These are invoked on the
-  // signaling thread.
-  // TODO(bugs.webrtc.org/11547): These '_s' signals likely all belong on the
-  // network thread.
-  sigslot::signal1<bool> SignalDataChannelTransportWritable_s
-      RTC_GUARDED_BY(signaling_thread());
-  sigslot::signal2<const cricket::ReceiveDataParams&,
-                   const rtc::CopyOnWriteBuffer&>
-      SignalDataChannelTransportReceivedData_s
-          RTC_GUARDED_BY(signaling_thread());
-  sigslot::signal1<int> SignalDataChannelTransportChannelClosing_s
-      RTC_GUARDED_BY(signaling_thread());
-  sigslot::signal1<int> SignalDataChannelTransportChannelClosed_s
-      RTC_GUARDED_BY(signaling_thread());
+  bool has_used_data_channels_ RTC_GUARDED_BY(signaling_thread()) = false;
 
   // Owning PeerConnection.
   PeerConnectionInternal* const pc_;

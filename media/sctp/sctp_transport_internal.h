@@ -19,9 +19,6 @@
 #include <vector>
 
 #include "api/transport/data_channel_transport_interface.h"
-// For SendDataParams/ReceiveDataParams.
-// TODO(deadbeef): Use something else for SCTP. It's confusing that we use an
-// SSRC field for SID.
 #include "media/base/media_channel.h"
 #include "p2p/base/packet_transport_internal.h"
 #include "rtc_base/copy_on_write_buffer.h"
@@ -46,6 +43,8 @@ constexpr int kSctpSendBufferSize = 256 * 1024;
 constexpr uint16_t kMaxSctpStreams = 1024;
 constexpr uint16_t kMaxSctpSid = kMaxSctpStreams - 1;
 constexpr uint16_t kMinSctpSid = 0;
+// The maximum number of streams that can be negotiated according to spec.
+constexpr uint16_t kSpecMaxSctpSid = 65535;
 
 // This is the default SCTP port to use. It is passed along the wire and the
 // connectee and connector must be using the same port. It is not related to the
@@ -119,10 +118,8 @@ class SctpTransportInternal {
   // initiates it, and both SignalClosingProcedureStartedRemotely and
   // SignalClosingProcedureComplete on the other side.
   virtual bool ResetStream(int sid) = 0;
-  // Send data down this channel (will be wrapped as SCTP packets then given to
-  // usrsctp that will then post the network interface).
+  // Send data down this channel.
   // Returns true iff successful data somewhere on the send-queue/network.
-  // Uses `params.ssrc` as the SCTP sid.
   virtual bool SendData(int sid,
                         const webrtc::SendDataParams& params,
                         const rtc::CopyOnWriteBuffer& payload,

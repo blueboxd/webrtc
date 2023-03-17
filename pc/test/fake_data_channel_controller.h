@@ -63,13 +63,6 @@ class FakeDataChannelController
     return true;
   }
 
-  void DisconnectDataChannel(webrtc::SctpDataChannel* data_channel) override {
-    RTC_CHECK(connected_channels_.find(data_channel) !=
-              connected_channels_.end());
-    RTC_LOG(LS_VERBOSE) << "DataChannel disconnected " << data_channel;
-    connected_channels_.erase(data_channel);
-  }
-
   void AddSctpDataStream(int sid) override {
     RTC_CHECK(sid >= 0);
     if (!transport_available_) {
@@ -87,8 +80,11 @@ class FakeDataChannelController
     // instantly, doing the same snapshot thing as below.
     for (webrtc::SctpDataChannel* ch : std::set<webrtc::SctpDataChannel*>(
              connected_channels_.begin(), connected_channels_.end())) {
-      if (connected_channels_.count(ch)) {
-        ch->OnClosingProcedureComplete(sid);
+      if (connected_channels_.count(ch) && ch->id() == sid) {
+        // This path mimics the DCC's OnChannelClosed handler since the FDCC
+        // (this class) doesn't have a transport that would do that.
+        ch->OnClosingProcedureComplete();
+        return;
       }
     }
   }
@@ -102,6 +98,7 @@ class FakeDataChannelController
       ++channels_opened_;
     } else if (state == webrtc::DataChannelInterface::DataState::kClosed) {
       ++channels_closed_;
+      connected_channels_.erase(data_channel);
     }
   }
 

@@ -12,6 +12,7 @@
 
 #include <utility>
 
+#include "absl/algorithm/container.h"
 #include "api/peer_connection_interface.h"
 #include "api/rtc_error.h"
 #include "pc/peer_connection_internal.h"
@@ -27,6 +28,11 @@ bool DataChannelController::HasDataChannels() const {
   return !sctp_data_channels_.empty();
 }
 
+bool DataChannelController::HasUsedDataChannels() const {
+  RTC_DCHECK_RUN_ON(signaling_thread());
+  return has_used_data_channels_;
+}
+
 bool DataChannelController::SendData(int sid,
                                      const SendDataParams& params,
                                      const rtc::CopyOnWriteBuffer& payload,
@@ -40,35 +46,9 @@ bool DataChannelController::SendData(int sid,
 bool DataChannelController::ConnectDataChannel(
     SctpDataChannel* webrtc_data_channel) {
   RTC_DCHECK_RUN_ON(signaling_thread());
-  if (!data_channel_transport()) {
-    // Don't log an error here, because DataChannels are expected to call
-    // ConnectDataChannel in this state. It's the only way to initially tell
-    // whether or not the underlying transport is ready.
-    return false;
-  }
-  SignalDataChannelTransportWritable_s.connect(
-      webrtc_data_channel, &SctpDataChannel::OnTransportReady);
-  SignalDataChannelTransportReceivedData_s.connect(
-      webrtc_data_channel, &SctpDataChannel::OnDataReceived);
-  SignalDataChannelTransportChannelClosing_s.connect(
-      webrtc_data_channel, &SctpDataChannel::OnClosingProcedureStartedRemotely);
-  SignalDataChannelTransportChannelClosed_s.connect(
-      webrtc_data_channel, &SctpDataChannel::OnClosingProcedureComplete);
-  return true;
-}
-
-void DataChannelController::DisconnectDataChannel(
-    SctpDataChannel* webrtc_data_channel) {
-  RTC_DCHECK_RUN_ON(signaling_thread());
-  if (!data_channel_transport()) {
-    RTC_LOG(LS_ERROR)
-        << "DisconnectDataChannel called when sctp_transport_ is NULL.";
-    return;
-  }
-  SignalDataChannelTransportWritable_s.disconnect(webrtc_data_channel);
-  SignalDataChannelTransportReceivedData_s.disconnect(webrtc_data_channel);
-  SignalDataChannelTransportChannelClosing_s.disconnect(webrtc_data_channel);
-  SignalDataChannelTransportChannelClosed_s.disconnect(webrtc_data_channel);
+  // TODO(bugs.webrtc.org/11547): This method can be removed once not
+  // needed by `SctpDataChannel`.
+  return data_channel_transport() ? true : false;
 }
 
 void DataChannelController::AddSctpDataStream(int sid) {
@@ -111,21 +91,19 @@ void DataChannelController::OnDataReceived(
     DataMessageType type,
     const rtc::CopyOnWriteBuffer& buffer) {
   RTC_DCHECK_RUN_ON(network_thread());
-  cricket::ReceiveDataParams params;
-  params.sid = channel_id;
-  params.type = type;
 
-  if (HandleOpenMessage_n(params, buffer))
+  if (HandleOpenMessage_n(channel_id, type, buffer))
     return;
 
   signaling_thread()->PostTask(
-      SafeTask(signaling_safety_.flag(), [this, params, buffer] {
+      SafeTask(signaling_safety_.flag(), [this, channel_id, type, buffer] {
         RTC_DCHECK_RUN_ON(signaling_thread());
         // TODO(bugs.webrtc.org/11547): The data being received should be
-        // delivered on the network thread (change
-        // SignalDataChannelTransportReceivedData_s to
-        // SignalDataChannelTransportReceivedData_n).
-        SignalDataChannelTransportReceivedData_s(params, buffer);
+        // delivered on the network thread.
+        for (const auto& channel : sctp_data_channels_) {
+          if (channel->id() == channel_id)
+            channel->OnDataReceived(type, buffer);
+        }
       }));
 }
 
@@ -134,7 +112,11 @@ void DataChannelController::OnChannelClosing(int channel_id) {
   signaling_thread()->PostTask(
       SafeTask(signaling_safety_.flag(), [this, channel_id] {
         RTC_DCHECK_RUN_ON(signaling_thread());
-        SignalDataChannelTransportChannelClosing_s(channel_id);
+        // TODO(bugs.webrtc.org/11547): Should run on the network thread.
+        for (const auto& channel : sctp_data_channels_) {
+          if (channel->id() == channel_id)
+            channel->OnClosingProcedureStartedRemotely();
+        }
       }));
 }
 
@@ -143,7 +125,20 @@ void DataChannelController::OnChannelClosed(int channel_id) {
   signaling_thread()->PostTask(
       SafeTask(signaling_safety_.flag(), [this, channel_id] {
         RTC_DCHECK_RUN_ON(signaling_thread());
-        SignalDataChannelTransportChannelClosed_s(channel_id);
+        auto it = absl::c_find_if(sctp_data_channels_, [&](const auto& c) {
+          return c->id() == channel_id;
+        });
+
+        // Remove the channel from our list, close it and free up resources.
+        if (it != sctp_data_channels_.end()) {
+          rtc::scoped_refptr<SctpDataChannel> channel = std::move(*it);
+          // Note: this causes OnSctpDataChannelClosed() to not do anything
+          // when called from within `OnClosingProcedureComplete`.
+          sctp_data_channels_.erase(it);
+          sid_allocator_.ReleaseSid(channel->sid());
+
+          channel->OnClosingProcedureComplete();
+        }
       }));
 }
 
@@ -152,7 +147,8 @@ void DataChannelController::OnReadyToSend() {
   signaling_thread()->PostTask(SafeTask(signaling_safety_.flag(), [this] {
     RTC_DCHECK_RUN_ON(signaling_thread());
     data_channel_transport_ready_to_send_ = true;
-    SignalDataChannelTransportWritable_s(data_channel_transport_ready_to_send_);
+    for (const auto& channel : sctp_data_channels_)
+      channel->OnTransportReady(true);
   }));
 }
 
@@ -213,19 +209,20 @@ std::vector<DataChannelStats> DataChannelController::GetDataChannelStats()
 }
 
 bool DataChannelController::HandleOpenMessage_n(
-    const cricket::ReceiveDataParams& params,
+    int channel_id,
+    DataMessageType type,
     const rtc::CopyOnWriteBuffer& buffer) {
-  if (params.type != DataMessageType::kControl || !IsOpenMessage(buffer))
+  if (type != DataMessageType::kControl || !IsOpenMessage(buffer))
     return false;
 
   // Received OPEN message; parse and signal that a new data channel should
   // be created.
   std::string label;
   InternalDataChannelInit config;
-  config.id = params.sid;
+  config.id = channel_id;
   if (!ParseDataChannelOpenMessage(buffer, &label, &config)) {
     RTC_LOG(LS_WARNING) << "Failed to parse the OPEN message for sid "
-                        << params.sid;
+                        << channel_id;
   } else {
     config.open_handshake_role = InternalDataChannelInit::kAcker;
     signaling_thread()->PostTask(
@@ -277,26 +274,34 @@ DataChannelController::InternalCreateSctpDataChannel(
   RTC_DCHECK_RUN_ON(signaling_thread());
   InternalDataChannelInit new_config =
       config ? (*config) : InternalDataChannelInit();
-  if (new_config.id < 0) {
+  StreamId sid(new_config.id);
+  if (!sid.HasValue()) {
     rtc::SSLRole role;
-    if ((pc_->GetSctpSslRole(&role)) &&
-        !sid_allocator_.AllocateSid(role, &new_config.id)) {
+    // TODO(bugs.webrtc.org/11547): `GetSctpSslRole` likely involves a hop to
+    // the network thread. (unless there's no transport). Change this so that
+    // the role is checked on the network thread and any network thread related
+    // initialization is done at the same time (to avoid additional hops).
+    if (pc_->GetSctpSslRole(&role) && !sid_allocator_.AllocateSid(role, &sid)) {
       RTC_LOG(LS_ERROR) << "No id can be allocated for the SCTP data channel.";
       return nullptr;
     }
-  } else if (!sid_allocator_.ReserveSid(new_config.id)) {
+    // Note that when we get here, the ID may still be invalid.
+  } else if (!sid_allocator_.ReserveSid(sid)) {
     RTC_LOG(LS_ERROR) << "Failed to create a SCTP data channel "
                          "because the id is already in use or out of range.";
     return nullptr;
   }
+  // In case `sid` has changed. Update `new_config` accordingly.
+  new_config.id = sid.stream_id_int();
   rtc::scoped_refptr<SctpDataChannel> channel(
       SctpDataChannel::Create(weak_factory_.GetWeakPtr(), label, new_config,
                               signaling_thread(), network_thread()));
   if (!channel) {
-    sid_allocator_.ReleaseSid(new_config.id);
+    sid_allocator_.ReleaseSid(sid);
     return nullptr;
   }
   sctp_data_channels_.push_back(channel);
+  has_used_data_channels_ = true;
   return channel;
 }
 
@@ -304,13 +309,16 @@ void DataChannelController::AllocateSctpSids(rtc::SSLRole role) {
   RTC_DCHECK_RUN_ON(signaling_thread());
   std::vector<rtc::scoped_refptr<SctpDataChannel>> channels_to_close;
   for (const auto& channel : sctp_data_channels_) {
-    if (channel->id() < 0) {
-      int sid;
+    if (!channel->sid().HasValue()) {
+      StreamId sid;
       if (!sid_allocator_.AllocateSid(role, &sid)) {
         RTC_LOG(LS_ERROR) << "Failed to allocate SCTP sid, closing channel.";
         channels_to_close.push_back(channel);
         continue;
       }
+      // TODO(bugs.webrtc.org/11547): This hides a blocking call to the network
+      // thread via AddSctpDataStream. Maybe it's better to move the whole loop
+      // to the network thread? Maybe even `sctp_data_channels_`?
       channel->SetSctpSid(sid);
     }
   }
@@ -326,19 +334,18 @@ void DataChannelController::OnSctpDataChannelClosed(SctpDataChannel* channel) {
   for (auto it = sctp_data_channels_.begin(); it != sctp_data_channels_.end();
        ++it) {
     if (it->get() == channel) {
-      if (channel->id() >= 0) {
+      if (channel->sid().HasValue()) {
         // After the closing procedure is done, it's safe to use this ID for
         // another data channel.
-        sid_allocator_.ReleaseSid(channel->id());
+        sid_allocator_.ReleaseSid(channel->sid());
       }
+
       // Since this method is triggered by a signal from the DataChannel,
       // we can't free it directly here; we need to free it asynchronously.
-      sctp_data_channels_to_free_.push_back(*it);
+      rtc::scoped_refptr<SctpDataChannel> release = std::move(*it);
       sctp_data_channels_.erase(it);
-      signaling_thread()->PostTask(SafeTask(signaling_safety_.flag(), [this] {
-        RTC_DCHECK_RUN_ON(signaling_thread());
-        sctp_data_channels_to_free_.clear();
-      }));
+      signaling_thread()->PostTask(SafeTask(signaling_safety_.flag(),
+                                            [release = std::move(release)] {}));
       return;
     }
   }

@@ -398,7 +398,7 @@ class RTC_EXPORT RTCSentRtpStreamStats : public RTCRtpStreamStats {
   RTCSentRtpStreamStats(const RTCSentRtpStreamStats& other);
   ~RTCSentRtpStreamStats() override;
 
-  RTCStatsMember<uint32_t> packets_sent;
+  RTCStatsMember<uint64_t> packets_sent;
   RTCStatsMember<uint64_t> bytes_sent;
 
  protected:
@@ -406,16 +406,14 @@ class RTC_EXPORT RTCSentRtpStreamStats : public RTCRtpStreamStats {
 };
 
 // https://w3c.github.io/webrtc-stats/#inboundrtpstats-dict*
-class RTC_EXPORT RTCInboundRTPStreamStats final
+class RTC_EXPORT RTCInboundRtpStreamStats final
     : public RTCReceivedRtpStreamStats {
  public:
   WEBRTC_RTCSTATS_DECL();
 
-  RTCInboundRTPStreamStats(std::string id, Timestamp timestamp);
-  RTCInboundRTPStreamStats(const RTCInboundRTPStreamStats& other);
-  ~RTCInboundRTPStreamStats() override;
-
-  // TODO(https://crbug.com/webrtc/14174): Implement trackIdentifier and kind.
+  RTCInboundRtpStreamStats(std::string id, Timestamp timestamp);
+  RTCInboundRtpStreamStats(const RTCInboundRtpStreamStats& other);
+  ~RTCInboundRtpStreamStats() override;
 
   RTCStatsMember<std::string> playout_id;
   RTCStatsMember<std::string> track_identifier;
@@ -464,8 +462,7 @@ class RTC_EXPORT RTCInboundRTPStreamStats final
   // Only populated if audio/video sync is enabled.
   // TODO(https://crbug.com/webrtc/14177): Expose even if A/V sync is off?
   RTCStatsMember<double> estimated_playout_timestamp;
-  // Only implemented for video.
-  // TODO(https://crbug.com/webrtc/14178): Also implement for audio.
+  // Only defined for video.
   RTCRestrictedStatsMember<std::string,
                            StatExposureCriteria::kHardwareCapability>
       decoder_implementation;
@@ -495,14 +492,14 @@ class RTC_EXPORT RTCInboundRTPStreamStats final
 };
 
 // https://w3c.github.io/webrtc-stats/#outboundrtpstats-dict*
-class RTC_EXPORT RTCOutboundRTPStreamStats final
+class RTC_EXPORT RTCOutboundRtpStreamStats final
     : public RTCSentRtpStreamStats {
  public:
   WEBRTC_RTCSTATS_DECL();
 
-  RTCOutboundRTPStreamStats(std::string id, Timestamp timestamp);
-  RTCOutboundRTPStreamStats(const RTCOutboundRTPStreamStats& other);
-  ~RTCOutboundRTPStreamStats() override;
+  RTCOutboundRtpStreamStats(std::string id, Timestamp timestamp);
+  RTCOutboundRtpStreamStats(const RTCOutboundRtpStreamStats& other);
+  ~RTCOutboundRtpStreamStats() override;
 
   RTCStatsMember<std::string> media_source_id;
   RTCStatsMember<std::string> remote_id;
