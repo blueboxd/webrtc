@@ -47,13 +47,11 @@ class DataChannelController : public SctpDataChannelControllerInterface,
 
   // Implements
   // SctpDataChannelProviderInterface.
-  bool SendData(int sid,
-                const SendDataParams& params,
-                const rtc::CopyOnWriteBuffer& payload,
-                cricket::SendDataResult* result) override;
-  bool ConnectDataChannel(SctpDataChannel* webrtc_data_channel) override;
-  void AddSctpDataStream(int sid) override;
-  void RemoveSctpDataStream(int sid) override;
+  RTCError SendData(StreamId sid,
+                    const SendDataParams& params,
+                    const rtc::CopyOnWriteBuffer& payload) override;
+  void AddSctpDataStream(StreamId sid) override;
+  void RemoveSctpDataStream(StreamId sid) override;
   bool ReadyToSendData() const override;
   void OnChannelStateChanged(SctpDataChannel* channel,
                              DataChannelInterface::DataState state) override;
@@ -84,8 +82,7 @@ class DataChannelController : public SctpDataChannelControllerInterface,
   // be offered in a SessionDescription, and wraps it in a proxy object.
   rtc::scoped_refptr<DataChannelInterface> InternalCreateDataChannelWithProxy(
       const std::string& label,
-      const InternalDataChannelInit*
-          config) /* RTC_RUN_ON(signaling_thread()) */;
+      const InternalDataChannelInit& config);
   void AllocateSctpSids(rtc::SSLRole role);
 
   // Checks if any data channel has been added.
@@ -93,10 +90,6 @@ class DataChannelController : public SctpDataChannelControllerInterface,
   bool HasDataChannels() const;
   // At some point in time, a data channel has existed.
   bool HasUsedDataChannels() const;
-  bool HasSctpDataChannels() const {
-    RTC_DCHECK_RUN_ON(signaling_thread());
-    return !sctp_data_channels_.empty();
-  }
 
   // Accessors
   DataChannelTransportInterface* data_channel_transport() const;
@@ -110,8 +103,7 @@ class DataChannelController : public SctpDataChannelControllerInterface,
  private:
   rtc::scoped_refptr<SctpDataChannel> InternalCreateSctpDataChannel(
       const std::string& label,
-      const InternalDataChannelInit*
-          config) /* RTC_RUN_ON(signaling_thread()) */;
+      const InternalDataChannelInit& config);
 
   // Parses and handles open messages.  Returns true if the message is an open
   // message and should be considered to be handled, false otherwise.
@@ -125,14 +117,16 @@ class DataChannelController : public SctpDataChannelControllerInterface,
       RTC_RUN_ON(signaling_thread());
 
   // Called from SendData when data_channel_transport() is true.
-  bool DataChannelSendData(int sid,
-                           const SendDataParams& params,
-                           const rtc::CopyOnWriteBuffer& payload,
-                           cricket::SendDataResult* result);
+  RTCError DataChannelSendData(StreamId sid,
+                               const SendDataParams& params,
+                               const rtc::CopyOnWriteBuffer& payload);
 
   // Called when all data channels need to be notified of a transport channel
   // (calls OnTransportChannelCreated on the signaling thread).
   void NotifyDataChannelsOfTransportCreated();
+
+  std::vector<rtc::scoped_refptr<SctpDataChannel>>::iterator FindChannel(
+      StreamId stream_id);
 
   rtc::Thread* network_thread() const;
   rtc::Thread* signaling_thread() const;
@@ -148,7 +142,7 @@ class DataChannelController : public SctpDataChannelControllerInterface,
   bool data_channel_transport_ready_to_send_
       RTC_GUARDED_BY(signaling_thread()) = false;
 
-  SctpSidAllocator sid_allocator_ /* RTC_GUARDED_BY(signaling_thread()) */;
+  SctpSidAllocator sid_allocator_;
   std::vector<rtc::scoped_refptr<SctpDataChannel>> sctp_data_channels_
       RTC_GUARDED_BY(signaling_thread());
   bool has_used_data_channels_ RTC_GUARDED_BY(signaling_thread()) = false;

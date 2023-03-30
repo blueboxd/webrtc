@@ -205,7 +205,8 @@ class FakePeerConnectionForStats : public FakePeerConnectionBase {
         dependencies_(MakeDependencies()),
         context_(ConnectionContext::Create(&dependencies_)),
         local_streams_(StreamCollection::Create()),
-        remote_streams_(StreamCollection::Create()) {}
+        remote_streams_(StreamCollection::Create()),
+        data_channel_controller_(network_thread_) {}
 
   ~FakePeerConnectionForStats() {
     for (auto transceiver : transceivers_) {
@@ -343,7 +344,7 @@ class FakePeerConnectionForStats : public FakePeerConnectionBase {
                           const InternalDataChannelInit& init) {
     // TODO(bugs.webrtc.org/11547): Supply a separate network thread.
     AddSctpDataChannel(SctpDataChannel::Create(
-        data_channel_controller_.weak_ptr(), label, init,
+        data_channel_controller_.weak_ptr(), label, false, init,
         rtc::Thread::Current(), rtc::Thread::Current()));
   }
 

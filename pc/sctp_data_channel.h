@@ -22,12 +22,14 @@
 #include "api/priority.h"
 #include "api/rtc_error.h"
 #include "api/scoped_refptr.h"
+#include "api/sequence_checker.h"
 #include "api/transport/data_channel_transport_interface.h"
 #include "pc/data_channel_utils.h"
 #include "pc/sctp_utils.h"
 #include "rtc_base/containers/flat_set.h"
 #include "rtc_base/copy_on_write_buffer.h"
 #include "rtc_base/ssl_stream_adapter.h"  // For SSLRole
+#include "rtc_base/system/no_unique_address.h"
 #include "rtc_base/thread.h"
 #include "rtc_base/thread_annotations.h"
 #include "rtc_base/weak_ptr.h"
@@ -36,22 +38,23 @@ namespace webrtc {
 
 class SctpDataChannel;
 
-// TODO(deadbeef): Get rid of this and have SctpDataChannel depend on
-// SctpTransportInternal (pure virtual SctpTransport interface) instead.
+// Interface that acts as a bridge from the data channel to the transport.
+// TODO(bugs.webrtc.org/11547): The transport operates on the network thread
+// and ultimately all the methods in this interface need to be invoked on the
+// network thread. Currently, some are called on the signaling thread.
 class SctpDataChannelControllerInterface {
  public:
   // Sends the data to the transport.
-  virtual bool SendData(int sid,
-                        const SendDataParams& params,
-                        const rtc::CopyOnWriteBuffer& payload,
-                        cricket::SendDataResult* result) = 0;
-  // Connects to the transport signals.
-  virtual bool ConnectDataChannel(SctpDataChannel* data_channel) = 0;
+  virtual RTCError SendData(StreamId sid,
+                            const SendDataParams& params,
+                            const rtc::CopyOnWriteBuffer& payload) = 0;
   // Adds the data channel SID to the transport for SCTP.
-  virtual void AddSctpDataStream(int sid) = 0;
+  // Note: Must be called on the network thread.
+  virtual void AddSctpDataStream(StreamId sid) = 0;
   // Begins the closing procedure by sending an outgoing stream reset. Still
   // need to wait for callbacks to tell when this completes.
-  virtual void RemoveSctpDataStream(int sid) = 0;
+  // Note: Must be called on the network thread.
+  virtual void RemoveSctpDataStream(StreamId sid) = 0;
   // Returns true if the transport channel is ready to send data.
   virtual bool ReadyToSendData() const = 0;
   // Notifies the controller of state changes.
@@ -73,25 +76,33 @@ struct InternalDataChannelInit : public DataChannelInit {
   bool IsValid() const;
 
   OpenHandshakeRole open_handshake_role;
+  // Optional fallback or backup flag from PC that's used for non-prenegotiated
+  // stream ids in situations where we cannot determine the SSL role from the
+  // transport for purposes of generating a stream ID.
+  // See: https://www.rfc-editor.org/rfc/rfc8832.html#name-protocol-overview
+  absl::optional<rtc::SSLRole> fallback_ssl_role;
 };
 
 // Helper class to allocate unique IDs for SCTP DataChannels.
 class SctpSidAllocator {
  public:
+  SctpSidAllocator() = default;
   // Gets the first unused odd/even id based on the DTLS role. If `role` is
   // SSL_CLIENT, the allocated id starts from 0 and takes even numbers;
   // otherwise, the id starts from 1 and takes odd numbers.
-  // Returns false if no ID can be allocated.
-  bool AllocateSid(rtc::SSLRole role, StreamId* sid);
+  // If a `StreamId` cannot be allocated, `StreamId::HasValue()` will be false.
+  StreamId AllocateSid(rtc::SSLRole role);
 
   // Attempts to reserve a specific sid. Returns false if it's unavailable.
-  bool ReserveSid(const StreamId& sid);
+  bool ReserveSid(StreamId sid);
 
   // Indicates that `sid` isn't in use any more, and is thus available again.
-  void ReleaseSid(const StreamId& sid);
+  void ReleaseSid(StreamId sid);
 
  private:
-  flat_set<StreamId> used_sids_;
+  flat_set<StreamId> used_sids_ RTC_GUARDED_BY(&sequence_checker_);
+  RTC_NO_UNIQUE_ADDRESS SequenceChecker sequence_checker_{
+      SequenceChecker::kDetached};
 };
 
 // SctpDataChannel is an implementation of the DataChannelInterface based on
@@ -123,6 +134,7 @@ class SctpDataChannel : public DataChannelInterface {
   static rtc::scoped_refptr<SctpDataChannel> Create(
       rtc::WeakPtr<SctpDataChannelControllerInterface> controller,
       const std::string& label,
+      bool connected_to_transport,
       const InternalDataChannelInit& config,
       rtc::Thread* signaling_thread,
       rtc::Thread* network_thread);
@@ -175,7 +187,7 @@ class SctpDataChannel : public DataChannelInterface {
   // Called when the SctpTransport's ready to use. That can happen when we've
   // finished negotiation, or if the channel was created after negotiation has
   // already finished.
-  void OnTransportReady(bool writable);
+  void OnTransportReady();
 
   void OnDataReceived(DataMessageType type,
                       const rtc::CopyOnWriteBuffer& payload);
@@ -192,7 +204,6 @@ class SctpDataChannel : public DataChannelInterface {
   // asynchronously after RemoveSctpDataStream.
   void OnClosingProcedureComplete();
   // Called when the transport channel is created.
-  // Only needs to be called for SCTP data channels.
   void OnTransportChannelCreated();
   // Called when the transport channel is unusable.
   // This method makes sure the DataChannel is disconnected and changes state
@@ -200,6 +211,11 @@ class SctpDataChannel : public DataChannelInterface {
   void OnTransportChannelClosed(RTCError error);
 
   DataChannelStats GetStats() const;
+
+  // Returns a unique identifier that's guaranteed to always be available,
+  // doesn't change throughout SctpDataChannel's lifetime and is used for
+  // stats purposes (see also `GetStats()`).
+  int internal_id() const { return internal_id_; }
 
   const StreamId& sid() const { return id_; }
 
@@ -211,6 +227,7 @@ class SctpDataChannel : public DataChannelInterface {
   SctpDataChannel(const InternalDataChannelInit& config,
                   rtc::WeakPtr<SctpDataChannelControllerInterface> controller,
                   const std::string& label,
+                  bool connected_to_transport,
                   rtc::Thread* signaling_thread,
                   rtc::Thread* network_thread);
   ~SctpDataChannel() override;
@@ -225,10 +242,8 @@ class SctpDataChannel : public DataChannelInterface {
     kHandshakeReady
   };
 
-  void Init();
   void UpdateState();
   void SetState(DataState state);
-  void DisconnectFromTransport();
 
   void DeliverQueuedReceivedData();
 
@@ -264,7 +279,6 @@ class SctpDataChannel : public DataChannelInterface {
   HandshakeState handshake_state_ RTC_GUARDED_BY(signaling_thread_) =
       kHandshakeInit;
   bool connected_to_transport_ RTC_GUARDED_BY(signaling_thread_) = false;
-  bool writable_ RTC_GUARDED_BY(signaling_thread_) = false;
   // Did we already start the graceful SCTP closing procedure?
   bool started_closing_procedure_ RTC_GUARDED_BY(signaling_thread_) = false;
   // Control messages that always have to get sent out before any queued

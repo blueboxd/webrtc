@@ -670,7 +670,8 @@ class RTCStatsCollectorTest : public ::testing::Test {
   RTCStatsCollectorTest()
       : pc_(rtc::make_ref_counted<FakePeerConnectionForStats>()),
         stats_(new RTCStatsCollectorWrapper(pc_)),
-        data_channel_controller_(new FakeDataChannelController()) {}
+        data_channel_controller_(
+            new FakeDataChannelController(pc_->network_thread())) {}
 
   void ExpectReportContainsCertificateInfo(
       const rtc::scoped_refptr<const RTCStatsReport>& report,
@@ -2122,20 +2123,19 @@ TEST_F(RTCStatsCollectorTest, CollectRTCPeerConnectionStats) {
     EXPECT_EQ(expected, report->Get("P")->cast_to<RTCPeerConnectionStats>());
   }
 
-  // TODO(bugs.webrtc.org/11547): Supply a separate network thread.
-  FakeDataChannelController controller;
+  FakeDataChannelController controller(pc_->network_thread());
   rtc::scoped_refptr<SctpDataChannel> dummy_channel_a = SctpDataChannel::Create(
-      controller.weak_ptr(), "DummyChannelA", InternalDataChannelInit(),
+      controller.weak_ptr(), "DummyChannelA", false, InternalDataChannelInit(),
       rtc::Thread::Current(), rtc::Thread::Current());
   rtc::scoped_refptr<SctpDataChannel> dummy_channel_b = SctpDataChannel::Create(
-      controller.weak_ptr(), "DummyChannelB", InternalDataChannelInit(),
+      controller.weak_ptr(), "DummyChannelB", false, InternalDataChannelInit(),
       rtc::Thread::Current(), rtc::Thread::Current());
 
   stats_->stats_collector()->OnSctpDataChannelStateChanged(
-      dummy_channel_a.get(), DataChannelInterface::DataState::kOpen);
+      dummy_channel_a->internal_id(), DataChannelInterface::DataState::kOpen);
   // Closing a channel that is not opened should not affect the counts.
   stats_->stats_collector()->OnSctpDataChannelStateChanged(
-      dummy_channel_b.get(), DataChannelInterface::DataState::kClosed);
+      dummy_channel_b->internal_id(), DataChannelInterface::DataState::kClosed);
 
   {
     rtc::scoped_refptr<const RTCStatsReport> report =
@@ -2148,9 +2148,9 @@ TEST_F(RTCStatsCollectorTest, CollectRTCPeerConnectionStats) {
   }
 
   stats_->stats_collector()->OnSctpDataChannelStateChanged(
-      dummy_channel_b.get(), DataChannelInterface::DataState::kOpen);
+      dummy_channel_b->internal_id(), DataChannelInterface::DataState::kOpen);
   stats_->stats_collector()->OnSctpDataChannelStateChanged(
-      dummy_channel_b.get(), DataChannelInterface::DataState::kClosed);
+      dummy_channel_b->internal_id(), DataChannelInterface::DataState::kClosed);
 
   {
     rtc::scoped_refptr<const RTCStatsReport> report =
@@ -2165,7 +2165,7 @@ TEST_F(RTCStatsCollectorTest, CollectRTCPeerConnectionStats) {
   // Re-opening a data channel (or opening a new data channel that is re-using
   // the same address in memory) should increase the opened count.
   stats_->stats_collector()->OnSctpDataChannelStateChanged(
-      dummy_channel_b.get(), DataChannelInterface::DataState::kOpen);
+      dummy_channel_b->internal_id(), DataChannelInterface::DataState::kOpen);
 
   {
     rtc::scoped_refptr<const RTCStatsReport> report =
@@ -2178,9 +2178,9 @@ TEST_F(RTCStatsCollectorTest, CollectRTCPeerConnectionStats) {
   }
 
   stats_->stats_collector()->OnSctpDataChannelStateChanged(
-      dummy_channel_a.get(), DataChannelInterface::DataState::kClosed);
+      dummy_channel_a->internal_id(), DataChannelInterface::DataState::kClosed);
   stats_->stats_collector()->OnSctpDataChannelStateChanged(
-      dummy_channel_b.get(), DataChannelInterface::DataState::kClosed);
+      dummy_channel_b->internal_id(), DataChannelInterface::DataState::kClosed);
 
   {
     rtc::scoped_refptr<const RTCStatsReport> report =

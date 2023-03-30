@@ -186,7 +186,7 @@ class TaskQueueMetronome : public webrtc::Metronome {
 
  private:
   const TimeDelta tick_period_;
-  SequenceChecker sequence_checker_;
+  SequenceChecker sequence_checker_{SequenceChecker::kDetached};
   std::vector<absl::AnyInvocable<void() &&>> callbacks_;
   ScopedTaskSafetyDetached safety_;
 };
@@ -868,9 +868,9 @@ class PeerConnectionIntegrationWrapper : public webrtc::PeerConnectionObserver,
     video_track_sources_.emplace_back(
         rtc::make_ref_counted<webrtc::FakePeriodicVideoTrackSource>(
             config, false /* remote */));
-    rtc::scoped_refptr<webrtc::VideoTrackInterface> track(
-        peer_connection_factory_->CreateVideoTrack(
-            rtc::CreateRandomUuid(), video_track_sources_.back().get()));
+    rtc::scoped_refptr<webrtc::VideoTrackInterface> track =
+        peer_connection_factory_->CreateVideoTrack(video_track_sources_.back(),
+                                                   rtc::CreateRandomUuid());
     if (!local_video_renderer_) {
       local_video_renderer_.reset(
           new webrtc::FakeVideoTrackRenderer(track.get()));

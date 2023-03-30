@@ -15,6 +15,7 @@
 #include "pc/peer_connection_internal.h"
 #include "pc/sctp_data_channel.h"
 #include "pc/test/mock_peer_connection_internal.h"
+#include "rtc_base/null_socket_server.h"
 #include "test/gmock.h"
 #include "test/gtest.h"
 #include "test/run_loop.h"
@@ -44,17 +45,22 @@ class MockDataChannelTransport : public webrtc::DataChannelTransportInterface {
 
 class DataChannelControllerTest : public ::testing::Test {
  protected:
-  DataChannelControllerTest() {
+  DataChannelControllerTest()
+      : network_thread_(std::make_unique<rtc::NullSocketServer>()) {
+    network_thread_.Start();
     pc_ = rtc::make_ref_counted<NiceMock<MockPeerConnectionInternal>>();
     ON_CALL(*pc_, signaling_thread)
         .WillByDefault(Return(rtc::Thread::Current()));
-    // TODO(tommi): Return a dedicated thread.
-    ON_CALL(*pc_, network_thread).WillByDefault(Return(rtc::Thread::Current()));
+    ON_CALL(*pc_, network_thread).WillByDefault(Return(&network_thread_));
   }
 
-  ~DataChannelControllerTest() override { run_loop_.Flush(); }
+  ~DataChannelControllerTest() override {
+    run_loop_.Flush();
+    network_thread_.Stop();
+  }
 
   test::RunLoop run_loop_;
+  rtc::Thread network_thread_;
   rtc::scoped_refptr<NiceMock<MockPeerConnectionInternal>> pc_;
 };
 
@@ -65,8 +71,7 @@ TEST_F(DataChannelControllerTest, CreateAndDestroy) {
 TEST_F(DataChannelControllerTest, CreateDataChannelEarlyRelease) {
   DataChannelController dcc(pc_.get());
   auto channel = dcc.InternalCreateDataChannelWithProxy(
-      "label",
-      std::make_unique<InternalDataChannelInit>(DataChannelInit()).get());
+      "label", InternalDataChannelInit(DataChannelInit()));
   channel = nullptr;  // dcc holds a reference to channel, so not destroyed yet
 }
 
@@ -75,8 +80,7 @@ TEST_F(DataChannelControllerTest, CreateDataChannelEarlyClose) {
   EXPECT_FALSE(dcc.HasDataChannels());
   EXPECT_FALSE(dcc.HasUsedDataChannels());
   auto channel = dcc.InternalCreateDataChannelWithProxy(
-      "label",
-      std::make_unique<InternalDataChannelInit>(DataChannelInit()).get());
+      "label", InternalDataChannelInit(DataChannelInit()));
   EXPECT_TRUE(dcc.HasDataChannels());
   EXPECT_TRUE(dcc.HasUsedDataChannels());
   channel->Close();
@@ -87,8 +91,7 @@ TEST_F(DataChannelControllerTest, CreateDataChannelEarlyClose) {
 TEST_F(DataChannelControllerTest, CreateDataChannelLateRelease) {
   auto dcc = std::make_unique<DataChannelController>(pc_.get());
   auto channel = dcc->InternalCreateDataChannelWithProxy(
-      "label",
-      std::make_unique<InternalDataChannelInit>(DataChannelInit()).get());
+      "label", InternalDataChannelInit(DataChannelInit()));
   dcc.reset();
   channel = nullptr;
 }
@@ -96,13 +99,7 @@ TEST_F(DataChannelControllerTest, CreateDataChannelLateRelease) {
 TEST_F(DataChannelControllerTest, CloseAfterControllerDestroyed) {
   auto dcc = std::make_unique<DataChannelController>(pc_.get());
   auto channel = dcc->InternalCreateDataChannelWithProxy(
-      "label",
-      std::make_unique<InternalDataChannelInit>(DataChannelInit()).get());
-  // Connect to provider
-  auto inner_channel =
-      DowncastProxiedDataChannelInterfaceToSctpDataChannelForTesting(
-          channel.get());
-  dcc->ConnectDataChannel(inner_channel);
+      "label", InternalDataChannelInit(DataChannelInit()));
   dcc.reset();
   channel->Close();
 }
@@ -111,8 +108,7 @@ TEST_F(DataChannelControllerTest, AsyncChannelCloseTeardown) {
   DataChannelController dcc(pc_.get());
   rtc::scoped_refptr<DataChannelInterface> channel =
       dcc.InternalCreateDataChannelWithProxy(
-          "label",
-          std::make_unique<InternalDataChannelInit>(DataChannelInit()).get());
+          "label", InternalDataChannelInit(DataChannelInit()));
   SctpDataChannel* inner_channel =
       DowncastProxiedDataChannelInterfaceToSctpDataChannelForTesting(
           channel.get());
@@ -121,9 +117,6 @@ TEST_F(DataChannelControllerTest, AsyncChannelCloseTeardown) {
 
   channel = nullptr;  // dcc still holds a reference to `channel`.
   EXPECT_TRUE(dcc.HasDataChannels());
-
-  // Make sure callbacks to dcc are set up.
-  dcc.ConnectDataChannel(inner_channel);
 
   // Trigger a Close() for the channel. This will send events back to dcc,
   // eventually reaching `OnSctpDataChannelClosed` where dcc removes
@@ -154,9 +147,9 @@ TEST_F(DataChannelControllerTest, MaxChannels) {
   NiceMock<MockDataChannelTransport> transport;
   int channel_id = 0;
 
-  ON_CALL(*pc_, GetSctpSslRole).WillByDefault([&](rtc::SSLRole* role) {
-    *role = (channel_id & 1) ? rtc::SSL_SERVER : rtc::SSL_CLIENT;
-    return true;
+  ON_CALL(*pc_, GetSctpSslRole_n).WillByDefault([&]() {
+    return absl::optional<rtc::SSLRole>((channel_id & 1) ? rtc::SSL_SERVER
+                                                         : rtc::SSL_CLIENT);
   });
 
   DataChannelController dcc(pc_.get());
@@ -168,8 +161,7 @@ TEST_F(DataChannelControllerTest, MaxChannels) {
   for (channel_id = 0; channel_id <= cricket::kMaxSctpStreams; ++channel_id) {
     rtc::scoped_refptr<DataChannelInterface> channel =
         dcc.InternalCreateDataChannelWithProxy(
-            "label",
-            std::make_unique<InternalDataChannelInit>(DataChannelInit()).get());
+            "label", InternalDataChannelInit(DataChannelInit()));
 
     if (channel_id == cricket::kMaxSctpStreams) {
       // We've reached the maximum and the previous call should have failed.

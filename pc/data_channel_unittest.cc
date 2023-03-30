@@ -26,9 +26,11 @@
 #include "pc/test/fake_data_channel_controller.h"
 #include "rtc_base/copy_on_write_buffer.h"
 #include "rtc_base/gunit.h"
+#include "rtc_base/null_socket_server.h"
 #include "rtc_base/ssl_stream_adapter.h"
 #include "rtc_base/thread.h"
 #include "test/gtest.h"
+#include "test/run_loop.h"
 
 namespace webrtc {
 
@@ -71,19 +73,18 @@ class FakeDataChannelObserver : public DataChannelObserver {
   size_t on_buffered_amount_change_count_;
 };
 
-// TODO(deadbeef): The fact that these tests use a fake controller makes them
-// not too valuable. Should rewrite using the
-// peerconnection_datachannel_unittest.cc infrastructure.
-// TODO(bugs.webrtc.org/11547): Incorporate a dedicated network thread.
 class SctpDataChannelTest : public ::testing::Test {
  protected:
   SctpDataChannelTest()
-      : controller_(new FakeDataChannelController()),
-        webrtc_data_channel_(SctpDataChannel::Create(controller_->weak_ptr(),
-                                                     "test",
-                                                     init_,
-                                                     rtc::Thread::Current(),
-                                                     rtc::Thread::Current())) {}
+      : network_thread_(std::make_unique<rtc::NullSocketServer>()),
+        controller_(new FakeDataChannelController(&network_thread_)),
+        webrtc_data_channel_(controller_->CreateDataChannel("test", init_)) {
+    network_thread_.Start();
+  }
+  ~SctpDataChannelTest() override {
+    run_loop_.Flush();
+    network_thread_.Stop();
+  }
 
   void SetChannelReady() {
     controller_->set_transport_available(true);
@@ -99,7 +100,8 @@ class SctpDataChannelTest : public ::testing::Test {
     webrtc_data_channel_->RegisterObserver(observer_.get());
   }
 
-  rtc::AutoThread main_thread_;
+  test::RunLoop run_loop_;
+  rtc::Thread network_thread_;
   InternalDataChannelInit init_;
   std::unique_ptr<FakeDataChannelController> controller_;
   std::unique_ptr<FakeDataChannelObserver> observer_;
@@ -137,27 +139,14 @@ TEST_F(SctpDataChannelTest, VerifyConfigurationGetters) {
 TEST_F(SctpDataChannelTest, ConnectedToTransportOnCreated) {
   controller_->set_transport_available(true);
   rtc::scoped_refptr<SctpDataChannel> dc =
-      SctpDataChannel::Create(controller_->weak_ptr(), "test1", init_,
-                              rtc::Thread::Current(), rtc::Thread::Current());
+      controller_->CreateDataChannel("test1", init_);
 
   EXPECT_TRUE(controller_->IsConnected(dc.get()));
   // The sid is not set yet, so it should not have added the streams.
-  EXPECT_FALSE(controller_->IsSendStreamAdded(dc->id()));
-  EXPECT_FALSE(controller_->IsRecvStreamAdded(dc->id()));
+  EXPECT_FALSE(controller_->IsStreamAdded(dc->sid()));
 
   dc->SetSctpSid(StreamId(0));
-  EXPECT_TRUE(controller_->IsSendStreamAdded(dc->id()));
-  EXPECT_TRUE(controller_->IsRecvStreamAdded(dc->id()));
-}
-
-// Verifies that the data channel is connected to the transport if the transport
-// is not available initially and becomes available later.
-TEST_F(SctpDataChannelTest, ConnectedAfterTransportBecomesAvailable) {
-  EXPECT_FALSE(controller_->IsConnected(webrtc_data_channel_.get()));
-
-  controller_->set_transport_available(true);
-  webrtc_data_channel_->OnTransportChannelCreated();
-  EXPECT_TRUE(controller_->IsConnected(webrtc_data_channel_.get()));
+  EXPECT_TRUE(controller_->IsStreamAdded(dc->sid()));
 }
 
 // Tests the state of the data channel.
@@ -174,6 +163,10 @@ TEST_F(SctpDataChannelTest, StateTransition) {
   // `Close()` should trigger two state changes, first `kClosing`, then
   // `kClose`.
   webrtc_data_channel_->Close();
+  // The (simulated) transport close notifications runs on the network thread
+  // and posts a completion notification to the signaling (current) thread.
+  // Allow that ooperation to complete before checking the state.
+  run_loop_.Flush();
   EXPECT_EQ(DataChannelInterface::kClosed, webrtc_data_channel_->state());
   EXPECT_EQ(observer_->on_state_change_count(), 3u);
   EXPECT_TRUE(webrtc_data_channel_->error().ok());
@@ -327,8 +320,7 @@ TEST_F(SctpDataChannelTest, LateCreatedChannelTransitionToOpen) {
   InternalDataChannelInit init;
   init.id = 1;
   rtc::scoped_refptr<SctpDataChannel> dc =
-      SctpDataChannel::Create(controller_->weak_ptr(), "test1", init,
-                              rtc::Thread::Current(), rtc::Thread::Current());
+      controller_->CreateDataChannel("test1", init);
   EXPECT_EQ(DataChannelInterface::kConnecting, dc->state());
   EXPECT_TRUE_WAIT(DataChannelInterface::kOpen == dc->state(), 1000);
 }
@@ -341,8 +333,7 @@ TEST_F(SctpDataChannelTest, SendUnorderedAfterReceivesOpenAck) {
   init.id = 1;
   init.ordered = false;
   rtc::scoped_refptr<SctpDataChannel> dc =
-      SctpDataChannel::Create(controller_->weak_ptr(), "test1", init,
-                              rtc::Thread::Current(), rtc::Thread::Current());
+      controller_->CreateDataChannel("test1", init);
 
   EXPECT_EQ_WAIT(DataChannelInterface::kOpen, dc->state(), 1000);
 
@@ -369,8 +360,7 @@ TEST_F(SctpDataChannelTest, SendUnorderedAfterReceiveData) {
   init.id = 1;
   init.ordered = false;
   rtc::scoped_refptr<SctpDataChannel> dc =
-      SctpDataChannel::Create(controller_->weak_ptr(), "test1", init,
-                              rtc::Thread::Current(), rtc::Thread::Current());
+      controller_->CreateDataChannel("test1", init);
 
   EXPECT_EQ_WAIT(DataChannelInterface::kOpen, dc->state(), 1000);
 
@@ -449,8 +439,7 @@ TEST_F(SctpDataChannelTest, NoMsgSentIfNegotiatedAndNotFromOpenMsg) {
 
   SetChannelReady();
   rtc::scoped_refptr<SctpDataChannel> dc =
-      SctpDataChannel::Create(controller_->weak_ptr(), "test1", config,
-                              rtc::Thread::Current(), rtc::Thread::Current());
+      controller_->CreateDataChannel("test1", config);
 
   EXPECT_EQ_WAIT(DataChannelInterface::kOpen, dc->state(), 1000);
   EXPECT_EQ(0, controller_->last_sid());
@@ -511,8 +500,7 @@ TEST_F(SctpDataChannelTest, OpenAckSentIfCreatedFromOpenMessage) {
 
   SetChannelReady();
   rtc::scoped_refptr<SctpDataChannel> dc =
-      SctpDataChannel::Create(controller_->weak_ptr(), "test1", config,
-                              rtc::Thread::Current(), rtc::Thread::Current());
+      controller_->CreateDataChannel("test1", config);
 
   EXPECT_EQ_WAIT(DataChannelInterface::kOpen, dc->state(), 1000);
 
@@ -678,18 +666,10 @@ class SctpSidAllocatorTest : public ::testing::Test {
 // Verifies that an even SCTP id is allocated for SSL_CLIENT and an odd id for
 // SSL_SERVER.
 TEST_F(SctpSidAllocatorTest, SctpIdAllocationBasedOnRole) {
-  StreamId id;
-  EXPECT_TRUE(allocator_.AllocateSid(rtc::SSL_SERVER, &id));
-  EXPECT_EQ(1, id.stream_id_int());
-  id.reset();
-  EXPECT_TRUE(allocator_.AllocateSid(rtc::SSL_CLIENT, &id));
-  EXPECT_EQ(0, id.stream_id_int());
-  id.reset();
-  EXPECT_TRUE(allocator_.AllocateSid(rtc::SSL_SERVER, &id));
-  EXPECT_EQ(3, id.stream_id_int());
-  id.reset();
-  EXPECT_TRUE(allocator_.AllocateSid(rtc::SSL_CLIENT, &id));
-  EXPECT_EQ(2, id.stream_id_int());
+  EXPECT_EQ(allocator_.AllocateSid(rtc::SSL_SERVER), StreamId(1));
+  EXPECT_EQ(allocator_.AllocateSid(rtc::SSL_CLIENT), StreamId(0));
+  EXPECT_EQ(allocator_.AllocateSid(rtc::SSL_SERVER), StreamId(3));
+  EXPECT_EQ(allocator_.AllocateSid(rtc::SSL_CLIENT), StreamId(2));
 }
 
 // Verifies that SCTP ids of existing DataChannels are not reused.
@@ -697,14 +677,14 @@ TEST_F(SctpSidAllocatorTest, SctpIdAllocationNoReuse) {
   StreamId old_id(1);
   EXPECT_TRUE(allocator_.ReserveSid(old_id));
 
-  StreamId new_id;
-  EXPECT_TRUE(allocator_.AllocateSid(rtc::SSL_SERVER, &new_id));
+  StreamId new_id = allocator_.AllocateSid(rtc::SSL_SERVER);
+  EXPECT_TRUE(new_id.HasValue());
   EXPECT_NE(old_id, new_id);
 
   old_id = StreamId(0);
   EXPECT_TRUE(allocator_.ReserveSid(old_id));
-  new_id.reset();
-  EXPECT_TRUE(allocator_.AllocateSid(rtc::SSL_CLIENT, &new_id));
+  new_id = allocator_.AllocateSid(rtc::SSL_CLIENT);
+  EXPECT_TRUE(new_id.HasValue());
   EXPECT_NE(old_id, new_id);
 }
 
@@ -715,41 +695,33 @@ TEST_F(SctpSidAllocatorTest, SctpIdReusedForRemovedDataChannel) {
   EXPECT_TRUE(allocator_.ReserveSid(odd_id));
   EXPECT_TRUE(allocator_.ReserveSid(even_id));
 
-  StreamId allocated_id;
-  EXPECT_TRUE(allocator_.AllocateSid(rtc::SSL_SERVER, &allocated_id));
+  StreamId allocated_id = allocator_.AllocateSid(rtc::SSL_SERVER);
   EXPECT_EQ(odd_id.stream_id_int() + 2, allocated_id.stream_id_int());
 
-  allocated_id.reset();
-  EXPECT_TRUE(allocator_.AllocateSid(rtc::SSL_CLIENT, &allocated_id));
+  allocated_id = allocator_.AllocateSid(rtc::SSL_CLIENT);
   EXPECT_EQ(even_id.stream_id_int() + 2, allocated_id.stream_id_int());
 
-  allocated_id.reset();
-  EXPECT_TRUE(allocator_.AllocateSid(rtc::SSL_SERVER, &allocated_id));
+  allocated_id = allocator_.AllocateSid(rtc::SSL_SERVER);
   EXPECT_EQ(odd_id.stream_id_int() + 4, allocated_id.stream_id_int());
 
-  allocated_id.reset();
-  EXPECT_TRUE(allocator_.AllocateSid(rtc::SSL_CLIENT, &allocated_id));
+  allocated_id = allocator_.AllocateSid(rtc::SSL_CLIENT);
   EXPECT_EQ(even_id.stream_id_int() + 4, allocated_id.stream_id_int());
 
   allocator_.ReleaseSid(odd_id);
   allocator_.ReleaseSid(even_id);
 
   // Verifies that removed ids are reused.
-  allocated_id.reset();
-  EXPECT_TRUE(allocator_.AllocateSid(rtc::SSL_SERVER, &allocated_id));
+  allocated_id = allocator_.AllocateSid(rtc::SSL_SERVER);
   EXPECT_EQ(odd_id, allocated_id);
 
-  allocated_id.reset();
-  EXPECT_TRUE(allocator_.AllocateSid(rtc::SSL_CLIENT, &allocated_id));
+  allocated_id = allocator_.AllocateSid(rtc::SSL_CLIENT);
   EXPECT_EQ(even_id, allocated_id);
 
   // Verifies that used higher ids are not reused.
-  allocated_id.reset();
-  EXPECT_TRUE(allocator_.AllocateSid(rtc::SSL_SERVER, &allocated_id));
+  allocated_id = allocator_.AllocateSid(rtc::SSL_SERVER);
   EXPECT_EQ(odd_id.stream_id_int() + 6, allocated_id.stream_id_int());
 
-  allocated_id.reset();
-  EXPECT_TRUE(allocator_.AllocateSid(rtc::SSL_CLIENT, &allocated_id));
+  allocated_id = allocator_.AllocateSid(rtc::SSL_CLIENT);
   EXPECT_EQ(even_id.stream_id_int() + 6, allocated_id.stream_id_int());
 }
 
