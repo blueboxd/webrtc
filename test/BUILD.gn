@@ -126,6 +126,57 @@ rtc_library("test_video_capturer") {
   ]
 }
 
+rtc_library("create_frame_generator_capturer") {
+  visibility = [ "*" ]
+  testonly = true
+  sources = [
+    "create_frame_generator_capturer.cc",
+    "create_frame_generator_capturer.h",
+  ]
+  deps = [
+    ":fileutils",
+    ":frame_generator_capturer",
+    "../api:create_frame_generator",
+    "../api:frame_generator_api",
+    "../api/task_queue",
+    "../api/units:time_delta",
+    "../rtc_base:checks",
+    "../system_wrappers",
+  ]
+  absl_deps = [
+    "//third_party/abseil-cpp/absl/strings",
+    "//third_party/abseil-cpp/absl/types:optional",
+  ]
+}
+
+rtc_library("frame_generator_capturer") {
+  visibility = [ "*" ]
+  testonly = true
+  sources = [
+    "frame_generator_capturer.cc",
+    "frame_generator_capturer.h",
+  ]
+  deps = [
+    ":test_video_capturer",
+    "../api:frame_generator_api",
+    "../api/task_queue",
+    "../api/units:time_delta",
+    "../api/video:video_frame",
+    "../api/video:video_rtp_headers",
+    "../rtc_base:checks",
+    "../rtc_base:logging",
+    "../rtc_base:macromagic",
+    "../rtc_base:rtc_task_queue",
+    "../rtc_base/synchronization:mutex",
+    "../rtc_base/task_utils:repeating_task",
+    "../system_wrappers",
+  ]
+  absl_deps = [
+    "//third_party/abseil-cpp/absl/strings",
+    "//third_party/abseil-cpp/absl/types:optional",
+  ]
+}
+
 rtc_library("video_test_common") {
   visibility = [ "*" ]
   testonly = true
@@ -135,8 +186,6 @@ rtc_library("video_test_common") {
     "fake_videorenderer.h",
     "frame_forwarder.cc",
     "frame_forwarder.h",
-    "frame_generator_capturer.cc",
-    "frame_generator_capturer.h",
     "mappable_native_buffer.cc",
     "mappable_native_buffer.h",
     "video_codec_settings.h",
@@ -146,6 +195,7 @@ rtc_library("video_test_common") {
   ]
 
   deps = [
+    ":create_frame_generator_capturer",
     ":fileutils",
     ":frame_utils",
     ":scoped_key_value_config",
@@ -655,11 +705,13 @@ if (rtc_include_tests) {
       deps = [
         ":call_config_utils",
         ":copy_to_file_audio_capturer_unittest",
+        ":create_frame_generator_capturer",
         ":direct_transport",
         ":fake_video_codecs",
         ":fileutils",
         ":fileutils_unittests",
         ":fixed_fps_video_frame_writer_adapter_test",
+        ":frame_generator_capturer",
         ":frame_generator_impl",
         ":perf_test",
         ":rtc_expect_death",
@@ -1029,6 +1081,7 @@ rtc_library("test_common") {
     ":encoder_settings",
     ":fake_video_codecs",
     ":fileutils",
+    ":frame_generator_capturer",
     ":mock_transport",
     ":run_loop",
     ":scoped_key_value_config",
@@ -1059,6 +1112,7 @@ rtc_library("test_common") {
     "../call:simulated_network",
     "../call:simulated_packet_receiver",
     "../call:video_stream_api",
+    "../modules/audio_device:audio_device_api",
     "../modules/audio_device:audio_device_impl",
     "../modules/audio_mixer:audio_mixer_impl",
     "../modules/rtp_rtcp",

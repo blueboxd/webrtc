@@ -51,6 +51,7 @@
 #include "api/transport/enums.h"
 #include "api/turn_customizer.h"
 #include "call/call.h"
+#include "modules/rtp_rtcp/source/rtp_packet_received.h"
 #include "p2p/base/ice_transport_internal.h"
 #include "p2p/base/port.h"
 #include "p2p/base/port_allocator.h"
@@ -433,7 +434,8 @@ class PeerConnection : public PeerConnectionInternal,
 
   bool SetupDataChannelTransport_n(const std::string& mid) override
       RTC_RUN_ON(network_thread());
-  void TeardownDataChannelTransport_n() override RTC_RUN_ON(network_thread());
+  void TeardownDataChannelTransport_n(RTCError error) override
+      RTC_RUN_ON(network_thread());
 
   const FieldTrialsView& trials() const override { return *trials_; }
 
@@ -599,6 +601,9 @@ class PeerConnection : public PeerConnectionInternal,
   std::function<void(const rtc::CopyOnWriteBuffer& packet,
                      int64_t packet_time_us)>
   InitializeRtcpCallback();
+
+  std::function<void(const RtpPacketReceived& parsed_packet)>
+  InitializeUnDemuxablePacketHandler();
 
   const rtc::scoped_refptr<ConnectionContext> context_;
   // Field trials active for this PeerConnection is the first of:

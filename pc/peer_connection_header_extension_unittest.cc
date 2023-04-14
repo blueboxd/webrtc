@@ -199,6 +199,39 @@ TEST_P(PeerConnectionHeaderExtensionTest, OffersUnstoppedModifiedExtensions) {
                           Field(&RtpExtension::uri, "uri3")));
 }
 
+TEST_P(PeerConnectionHeaderExtensionTest, AnswersUnstoppedModifiedExtensions) {
+  cricket::MediaType media_type;
+  SdpSemantics semantics;
+  std::tie(media_type, semantics) = GetParam();
+  if (semantics != SdpSemantics::kUnifiedPlan)
+    return;
+  std::unique_ptr<PeerConnectionWrapper> pc1 =
+      CreatePeerConnection(media_type, semantics);
+  std::unique_ptr<PeerConnectionWrapper> pc2 =
+      CreatePeerConnection(media_type, semantics);
+  auto transceiver1 = pc1->AddTransceiver(media_type);
+
+  auto offer = pc1->CreateOfferAndSetAsLocal(
+      PeerConnectionInterface::RTCOfferAnswerOptions());
+  pc2->SetRemoteDescription(std::move(offer));
+
+  ASSERT_EQ(pc2->pc()->GetTransceivers().size(), 1u);
+  auto transceiver2 = pc2->pc()->GetTransceivers()[0];
+  auto modified_extensions = transceiver2->GetHeaderExtensionsToNegotiate();
+  // Don't offer uri4.
+  modified_extensions[3].direction = RtpTransceiverDirection::kStopped;
+  transceiver2->SetHeaderExtensionsToNegotiate(modified_extensions);
+
+  auto answer = pc2->CreateAnswerAndSetAsLocal(
+      PeerConnectionInterface::RTCOfferAnswerOptions());
+  EXPECT_THAT(answer->description()
+                  ->contents()[0]
+                  .media_description()
+                  ->rtp_header_extensions(),
+              ElementsAre(Field(&RtpExtension::uri, "uri2"),
+                          Field(&RtpExtension::uri, "uri3")));
+}
+
 TEST_P(PeerConnectionHeaderExtensionTest, NegotiatedExtensionsAreAccessible) {
   cricket::MediaType media_type;
   SdpSemantics semantics;
@@ -233,6 +266,67 @@ TEST_P(PeerConnectionHeaderExtensionTest, NegotiatedExtensionsAreAccessible) {
                                 RtpTransceiverDirection::kSendRecv),
                           Field(&RtpHeaderExtensionCapability::direction,
                                 RtpTransceiverDirection::kStopped)));
+}
+
+TEST_P(PeerConnectionHeaderExtensionTest, OfferedExtensionsArePerTransceiver) {
+  cricket::MediaType media_type;
+  SdpSemantics semantics;
+  std::tie(media_type, semantics) = GetParam();
+  if (semantics != SdpSemantics::kUnifiedPlan)
+    return;
+  std::unique_ptr<PeerConnectionWrapper> pc1 =
+      CreatePeerConnection(media_type, semantics);
+  auto transceiver1 = pc1->AddTransceiver(media_type);
+  auto modified_extensions = transceiver1->GetHeaderExtensionsToNegotiate();
+  modified_extensions[3].direction = RtpTransceiverDirection::kStopped;
+  transceiver1->SetHeaderExtensionsToNegotiate(modified_extensions);
+  auto transceiver2 = pc1->AddTransceiver(media_type);
+
+  auto session_description = pc1->CreateOffer();
+  EXPECT_THAT(session_description->description()
+                  ->contents()[0]
+                  .media_description()
+                  ->rtp_header_extensions(),
+              ElementsAre(Field(&RtpExtension::uri, "uri2"),
+                          Field(&RtpExtension::uri, "uri3")));
+  EXPECT_THAT(session_description->description()
+                  ->contents()[1]
+                  .media_description()
+                  ->rtp_header_extensions(),
+              ElementsAre(Field(&RtpExtension::uri, "uri2"),
+                          Field(&RtpExtension::uri, "uri3"),
+                          Field(&RtpExtension::uri, "uri4")));
+}
+
+TEST_P(PeerConnectionHeaderExtensionTest, RemovalAfterRenegotiation) {
+  cricket::MediaType media_type;
+  SdpSemantics semantics;
+  std::tie(media_type, semantics) = GetParam();
+  if (semantics != SdpSemantics::kUnifiedPlan)
+    return;
+  std::unique_ptr<PeerConnectionWrapper> pc1 =
+      CreatePeerConnection(media_type, semantics);
+  std::unique_ptr<PeerConnectionWrapper> pc2 =
+      CreatePeerConnection(media_type, semantics);
+  auto transceiver1 = pc1->AddTransceiver(media_type);
+
+  auto offer = pc1->CreateOfferAndSetAsLocal(
+      PeerConnectionInterface::RTCOfferAnswerOptions());
+  pc2->SetRemoteDescription(std::move(offer));
+  auto answer = pc2->CreateAnswerAndSetAsLocal(
+      PeerConnectionInterface::RTCOfferAnswerOptions());
+  pc1->SetRemoteDescription(std::move(answer));
+
+  auto modified_extensions = transceiver1->GetHeaderExtensionsToNegotiate();
+  modified_extensions[3].direction = RtpTransceiverDirection::kStopped;
+  transceiver1->SetHeaderExtensionsToNegotiate(modified_extensions);
+  auto session_description = pc1->CreateOffer();
+  EXPECT_THAT(session_description->description()
+                  ->contents()[0]
+                  .media_description()
+                  ->rtp_header_extensions(),
+              ElementsAre(Field(&RtpExtension::uri, "uri2"),
+                          Field(&RtpExtension::uri, "uri3")));
 }
 
 TEST_P(PeerConnectionHeaderExtensionTest,
@@ -321,11 +415,11 @@ TEST_P(PeerConnectionHeaderExtensionTest,
   }
 }
 
-// This test is a regression test for behavior that the API
+// These tests are regression tests for behavior that the API
 // enables in a proper way. It conflicts with the behavior
 // of the API to only offer non-stopped extensions.
 TEST_P(PeerConnectionHeaderExtensionTest,
-       SdpMungingWithoutApiUsageEnablesExtensions) {
+       SdpMungingAnswerWithoutApiUsageEnablesExtensions) {
   cricket::MediaType media_type;
   SdpSemantics semantics;
   std::tie(media_type, semantics) = GetParam();
@@ -371,7 +465,6 @@ TEST_P(PeerConnectionHeaderExtensionTest,
   ASSERT_TRUE(pc->SetLocalDescription(std::move(modified_answer)));
 
   auto session_description = pc->CreateOffer();
-  ASSERT_TRUE(session_description->ToString(&sdp));
   EXPECT_THAT(session_description->description()
                   ->contents()[0]
                   .media_description()
@@ -380,6 +473,37 @@ TEST_P(PeerConnectionHeaderExtensionTest,
                           Field(&RtpExtension::uri, "uri2"),
                           Field(&RtpExtension::uri, "uri3"),
                           Field(&RtpExtension::uri, "uri4")));
+}
+
+TEST_P(PeerConnectionHeaderExtensionTest,
+       SdpMungingOfferWithoutApiUsageEnablesExtensions) {
+  cricket::MediaType media_type;
+  SdpSemantics semantics;
+  std::tie(media_type, semantics) = GetParam();
+  if (semantics != SdpSemantics::kUnifiedPlan)
+    return;
+  std::unique_ptr<PeerConnectionWrapper> pc =
+      CreatePeerConnection(media_type, semantics);
+  pc->AddTransceiver(media_type);
+
+  auto offer =
+      pc->CreateOffer(PeerConnectionInterface::RTCOfferAnswerOptions());
+  std::string modified_sdp;
+  ASSERT_TRUE(offer->ToString(&modified_sdp));
+  modified_sdp += "a=extmap:1 uri1\r\n";
+  auto modified_offer = CreateSessionDescription(SdpType::kOffer, modified_sdp);
+  ASSERT_TRUE(pc->SetLocalDescription(std::move(modified_offer)));
+
+  auto offer2 =
+      pc->CreateOffer(PeerConnectionInterface::RTCOfferAnswerOptions());
+  EXPECT_THAT(offer2->description()
+                  ->contents()[0]
+                  .media_description()
+                  ->rtp_header_extensions(),
+              ElementsAre(Field(&RtpExtension::uri, "uri2"),
+                          Field(&RtpExtension::uri, "uri3"),
+                          Field(&RtpExtension::uri, "uri4"),
+                          Field(&RtpExtension::uri, "uri1")));
 }
 
 TEST_P(PeerConnectionHeaderExtensionTest, EnablingExtensionsAfterRemoteOffer) {

@@ -18,21 +18,17 @@
 #include "modules/desktop_capture/rgba_color.h"
 #include "modules/desktop_capture/win/screen_capturer_win_directx.h"
 #include "modules/desktop_capture/win/screen_capturer_win_gdi.h"
-#include "modules/desktop_capture/win/screen_capturer_win_magnifier.h"
 
 namespace webrtc {
 
 namespace {
 
-std::unique_ptr<DesktopCapturer> CreateScreenCapturerWinDirectx() {
-  std::unique_ptr<DesktopCapturer> capturer(new ScreenCapturerWinDirectx());
+std::unique_ptr<DesktopCapturer> CreateScreenCapturerWinDirectx(
+    const DesktopCaptureOptions& options) {
+  std::unique_ptr<DesktopCapturer> capturer(
+      new ScreenCapturerWinDirectx(options));
   capturer.reset(new BlankDetectorDesktopCapturerWrapper(
       std::move(capturer), RgbaColor(0, 0, 0, 0)));
-  return capturer;
-}
-
-std::unique_ptr<DesktopCapturer> CreateScreenCapturerWinMagnifier() {
-  std::unique_ptr<DesktopCapturer> capturer(new ScreenCapturerWinMagnifier());
   return capturer;
 }
 
@@ -51,16 +47,9 @@ std::unique_ptr<DesktopCapturer> DesktopCapturer::CreateRawScreenCapturer(
     auto dxgi_duplicator_controller = DxgiDuplicatorController::Instance();
     if (ScreenCapturerWinDirectx::IsSupported()) {
       capturer.reset(new FallbackDesktopCapturerWrapper(
-          CreateScreenCapturerWinDirectx(), std::move(capturer)));
+          CreateScreenCapturerWinDirectx(options), std::move(capturer)));
       return capturer;
     }
-  } else if (options.allow_use_magnification_api()) {
-    // ScreenCapturerWinMagnifier cannot work on Windows XP or earlier, as well
-    // as 64-bit only Windows, and it may randomly crash on multi-screen
-    // systems. So we may need to fallback to use original capturer.
-    capturer.reset(new FallbackDesktopCapturerWrapper(
-        CreateScreenCapturerWinMagnifier(), std::move(capturer)));
-    return capturer;
   }
 
   // Use GDI as default capturer without any fallback solution.

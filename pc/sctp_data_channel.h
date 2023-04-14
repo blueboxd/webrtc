@@ -23,6 +23,7 @@
 #include "api/rtc_error.h"
 #include "api/scoped_refptr.h"
 #include "api/sequence_checker.h"
+#include "api/task_queue/pending_task_safety_flag.h"
 #include "api/transport/data_channel_transport_interface.h"
 #include "pc/data_channel_utils.h"
 #include "pc/sctp_utils.h"
@@ -39,9 +40,7 @@ namespace webrtc {
 class SctpDataChannel;
 
 // Interface that acts as a bridge from the data channel to the transport.
-// TODO(bugs.webrtc.org/11547): The transport operates on the network thread
-// and ultimately all the methods in this interface need to be invoked on the
-// network thread. Currently, some are called on the signaling thread.
+// All methods in this interface need to be invoked on the network thread.
 class SctpDataChannelControllerInterface {
  public:
   // Sends the data to the transport.
@@ -49,14 +48,10 @@ class SctpDataChannelControllerInterface {
                             const SendDataParams& params,
                             const rtc::CopyOnWriteBuffer& payload) = 0;
   // Adds the data channel SID to the transport for SCTP.
-  // Note: Must be called on the network thread.
   virtual void AddSctpDataStream(StreamId sid) = 0;
   // Begins the closing procedure by sending an outgoing stream reset. Still
   // need to wait for callbacks to tell when this completes.
-  // Note: Must be called on the network thread.
   virtual void RemoveSctpDataStream(StreamId sid) = 0;
-  // Returns true if the transport channel is ready to send data.
-  virtual bool ReadyToSendData() const = 0;
   // Notifies the controller of state changes.
   virtual void OnChannelStateChanged(SctpDataChannel* data_channel,
                                      DataChannelInterface::DataState state) = 0;
@@ -141,8 +136,14 @@ class SctpDataChannel : public DataChannelInterface {
 
   // Instantiates an API proxy for a SctpDataChannel instance that will be
   // handed out to external callers.
+  // The `signaling_safety` flag is used for the ObserverAdapter callback proxy
+  // which delivers callbacks on the signaling thread but must not deliver such
+  // callbacks after the peerconnection has been closed. The data controller
+  // will update the flag when closed, which will cancel any pending event
+  // notifications.
   static rtc::scoped_refptr<DataChannelInterface> CreateProxy(
-      rtc::scoped_refptr<SctpDataChannel> channel);
+      rtc::scoped_refptr<SctpDataChannel> channel,
+      rtc::scoped_refptr<PendingTaskSafetyFlag> signaling_safety);
 
   void RegisterObserver(DataChannelObserver* observer) override;
   void UnregisterObserver() override;
@@ -171,6 +172,8 @@ class SctpDataChannel : public DataChannelInterface {
   uint32_t messages_received() const override;
   uint64_t bytes_received() const override;
   bool Send(const DataBuffer& buffer) override;
+  void SendAsync(DataBuffer buffer,
+                 absl::AnyInvocable<void(RTCError) &&> on_complete) override;
 
   // Close immediately, ignoring any queued data or closing procedure.
   // This is called when the underlying SctpTransport is being destroyed.
@@ -194,7 +197,7 @@ class SctpDataChannel : public DataChannelInterface {
 
   // Sets the SCTP sid and adds to transport layer if not set yet. Should only
   // be called once.
-  void SetSctpSid(const StreamId& sid);
+  void SetSctpSid_n(StreamId sid);
 
   // The remote side started the closing procedure by resetting its outgoing
   // stream (our incoming stream). Sets state to kClosing.
@@ -217,7 +220,10 @@ class SctpDataChannel : public DataChannelInterface {
   // stats purposes (see also `GetStats()`).
   int internal_id() const { return internal_id_; }
 
-  const StreamId& sid() const { return id_; }
+  StreamId sid_n() const {
+    RTC_DCHECK_RUN_ON(network_thread_);
+    return id_n_;
+  }
 
   // Reset the allocator for internal ID values for testing, so that
   // the internal IDs generated are predictable. Test only.
@@ -233,6 +239,8 @@ class SctpDataChannel : public DataChannelInterface {
   ~SctpDataChannel() override;
 
  private:
+  class ObserverAdapter;
+
   // The OPEN(_ACK) signaling state.
   enum HandshakeState {
     kHandshakeInit,
@@ -242,22 +250,29 @@ class SctpDataChannel : public DataChannelInterface {
     kHandshakeReady
   };
 
-  void UpdateState();
-  void SetState(DataState state);
+  RTCError SendImpl(DataBuffer buffer) RTC_RUN_ON(network_thread_);
+  void UpdateState() RTC_RUN_ON(network_thread_);
+  void SetState(DataState state) RTC_RUN_ON(network_thread_);
 
-  void DeliverQueuedReceivedData();
+  void DeliverQueuedReceivedData() RTC_RUN_ON(network_thread_);
 
-  void SendQueuedDataMessages();
-  bool SendDataMessage(const DataBuffer& buffer, bool queue_if_blocked);
-  bool QueueSendDataMessage(const DataBuffer& buffer);
+  void SendQueuedDataMessages() RTC_RUN_ON(network_thread_);
+  RTCError SendDataMessage(const DataBuffer& buffer, bool queue_if_blocked)
+      RTC_RUN_ON(network_thread_);
+  bool QueueSendDataMessage(const DataBuffer& buffer)
+      RTC_RUN_ON(network_thread_);
 
-  void SendQueuedControlMessages();
-  void QueueControlMessage(const rtc::CopyOnWriteBuffer& buffer);
-  bool SendControlMessage(const rtc::CopyOnWriteBuffer& buffer);
+  void SendQueuedControlMessages() RTC_RUN_ON(network_thread_);
+  bool SendControlMessage(const rtc::CopyOnWriteBuffer& buffer)
+      RTC_RUN_ON(network_thread_);
+
+  bool connected_to_transport() const RTC_RUN_ON(network_thread_) {
+    return network_safety_->alive();
+  }
 
   rtc::Thread* const signaling_thread_;
   rtc::Thread* const network_thread_;
-  StreamId id_;
+  StreamId id_n_ RTC_GUARDED_BY(network_thread_);
   const int internal_id_;
   const std::string label_;
   const std::string protocol_;
@@ -267,31 +282,28 @@ class SctpDataChannel : public DataChannelInterface {
   const bool negotiated_;
   const bool ordered_;
 
-  DataChannelObserver* observer_ RTC_GUARDED_BY(signaling_thread_) = nullptr;
-  DataState state_ RTC_GUARDED_BY(signaling_thread_) = kConnecting;
-  RTCError error_ RTC_GUARDED_BY(signaling_thread_);
-  uint32_t messages_sent_ RTC_GUARDED_BY(signaling_thread_) = 0;
-  uint64_t bytes_sent_ RTC_GUARDED_BY(signaling_thread_) = 0;
-  uint32_t messages_received_ RTC_GUARDED_BY(signaling_thread_) = 0;
-  uint64_t bytes_received_ RTC_GUARDED_BY(signaling_thread_) = 0;
+  DataChannelObserver* observer_ RTC_GUARDED_BY(network_thread_) = nullptr;
+  std::unique_ptr<ObserverAdapter> observer_adapter_;
+  DataState state_ RTC_GUARDED_BY(network_thread_) = kConnecting;
+  RTCError error_ RTC_GUARDED_BY(network_thread_);
+  uint32_t messages_sent_ RTC_GUARDED_BY(network_thread_) = 0;
+  uint64_t bytes_sent_ RTC_GUARDED_BY(network_thread_) = 0;
+  uint32_t messages_received_ RTC_GUARDED_BY(network_thread_) = 0;
+  uint64_t bytes_received_ RTC_GUARDED_BY(network_thread_) = 0;
   rtc::WeakPtr<SctpDataChannelControllerInterface> controller_
-      RTC_GUARDED_BY(signaling_thread_);
-  HandshakeState handshake_state_ RTC_GUARDED_BY(signaling_thread_) =
+      RTC_GUARDED_BY(network_thread_);
+  HandshakeState handshake_state_ RTC_GUARDED_BY(network_thread_) =
       kHandshakeInit;
-  bool connected_to_transport_ RTC_GUARDED_BY(signaling_thread_) = false;
   // Did we already start the graceful SCTP closing procedure?
-  bool started_closing_procedure_ RTC_GUARDED_BY(signaling_thread_) = false;
+  bool started_closing_procedure_ RTC_GUARDED_BY(network_thread_) = false;
   // Control messages that always have to get sent out before any queued
   // data.
-  PacketQueue queued_control_data_ RTC_GUARDED_BY(signaling_thread_);
-  PacketQueue queued_received_data_ RTC_GUARDED_BY(signaling_thread_);
-  PacketQueue queued_send_data_ RTC_GUARDED_BY(signaling_thread_);
+  PacketQueue queued_control_data_ RTC_GUARDED_BY(network_thread_);
+  PacketQueue queued_received_data_ RTC_GUARDED_BY(network_thread_);
+  PacketQueue queued_send_data_ RTC_GUARDED_BY(network_thread_);
+  rtc::scoped_refptr<PendingTaskSafetyFlag> network_safety_ =
+      PendingTaskSafetyFlag::CreateDetachedInactive();
 };
-
-// Downcast a PeerConnectionInterface that points to a proxy object
-// to its underlying SctpDataChannel object. For testing only.
-SctpDataChannel* DowncastProxiedDataChannelInterfaceToSctpDataChannelForTesting(
-    DataChannelInterface* channel);
 
 }  // namespace webrtc
 

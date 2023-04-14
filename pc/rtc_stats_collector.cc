@@ -851,7 +851,7 @@ ProduceRemoteInboundRtpStreamStatsFromReportBlockData(
   auto remote_inbound = std::make_unique<RTCRemoteInboundRtpStreamStats>(
       RTCRemoteInboundRtpStreamStatsIdFromSourceSsrc(media_type,
                                                      report_block.source_ssrc),
-      Timestamp::Micros(report_block_data.report_block_timestamp_utc_us()));
+      report_block_data.report_block_timestamp_utc());
   remote_inbound->ssrc = report_block.source_ssrc;
   remote_inbound->kind =
       media_type == cricket::MEDIA_TYPE_AUDIO ? "audio" : "video";
@@ -860,12 +860,10 @@ ProduceRemoteInboundRtpStreamStatsFromReportBlockData(
       static_cast<double>(report_block.fraction_lost) / (1 << 8);
   if (report_block_data.num_rtts() > 0) {
     remote_inbound->round_trip_time =
-        static_cast<double>(report_block_data.last_rtt_ms()) /
-        rtc::kNumMillisecsPerSec;
+        report_block_data.last_rtt().seconds<double>();
   }
   remote_inbound->total_round_trip_time =
-      static_cast<double>(report_block_data.sum_rtt_ms()) /
-      rtc::kNumMillisecsPerSec;
+      report_block_data.sum_rtts().seconds<double>();
   remote_inbound->round_trip_time_measurements =
       report_block_data.num_rtts();
 
@@ -1499,7 +1497,6 @@ void RTCStatsCollector::ProducePartialResultsOnSignalingThreadImpl(
   RTC_DCHECK_RUN_ON(signaling_thread_);
   rtc::Thread::ScopedDisallowBlockingCalls no_blocking_calls;
 
-  ProduceDataChannelStats_s(timestamp, partial_report);
   ProduceMediaStreamStats_s(timestamp, partial_report);
   ProduceMediaStreamTrackStats_s(timestamp, partial_report);
   ProduceMediaSourceStats_s(timestamp, partial_report);
@@ -1518,6 +1515,8 @@ void RTCStatsCollector::ProducePartialResultsOnNetworkThread(
   // Touching `network_report_` on this thread is safe by this method because
   // `network_report_event_` is reset before this method is invoked.
   network_report_ = RTCStatsReport::Create(timestamp);
+
+  ProduceDataChannelStats_n(timestamp, network_report_.get());
 
   std::set<std::string> transport_names;
   if (sctp_transport_name) {
@@ -1653,10 +1652,10 @@ void RTCStatsCollector::ProduceCertificateStats_n(
   }
 }
 
-void RTCStatsCollector::ProduceDataChannelStats_s(
+void RTCStatsCollector::ProduceDataChannelStats_n(
     Timestamp timestamp,
     RTCStatsReport* report) const {
-  RTC_DCHECK_RUN_ON(signaling_thread_);
+  RTC_DCHECK_RUN_ON(network_thread_);
   rtc::Thread::ScopedDisallowBlockingCalls no_blocking_calls;
   std::vector<DataChannelStats> data_stats = pc_->GetDataChannelStats();
   for (const auto& stats : data_stats) {
