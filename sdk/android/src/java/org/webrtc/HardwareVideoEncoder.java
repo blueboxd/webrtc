@@ -100,7 +100,6 @@ class HardwareVideoEncoder implements VideoEncoder {
   private final VideoCodecMimeType codecType;
   private final Integer surfaceColorFormat;
   private final Integer yuvColorFormat;
-  private final YuvFormat yuvFormat;
   private final Map<String, String> params;
   private final int keyFrameIntervalSec; // Base interval for generating key frames.
   // Interval at which to force a key frame. Used to reduce color distortions caused by some
@@ -143,6 +142,10 @@ class HardwareVideoEncoder implements VideoEncoder {
   private int stride;
   // Y-plane slice-height in the encoder's input
   private int sliceHeight;
+  // True if encoder input color format is semi-planar (NV12).
+  private boolean isSemiPlanar;
+  // Size of frame for current color format and stride, in bytes.
+  private int frameSizeBytes;
   private boolean useSurfaceMode;
 
   // --- Only accessed from the encoding thread.
@@ -190,7 +193,6 @@ class HardwareVideoEncoder implements VideoEncoder {
     this.codecType = codecType;
     this.surfaceColorFormat = surfaceColorFormat;
     this.yuvColorFormat = yuvColorFormat;
-    this.yuvFormat = YuvFormat.valueOf(yuvColorFormat);
     this.params = params;
     this.keyFrameIntervalSec = keyFrameIntervalSec;
     this.forcedKeyFrameNs = TimeUnit.MILLISECONDS.toNanos(forceKeyFrameIntervalMs);
@@ -265,6 +267,11 @@ class HardwareVideoEncoder implements VideoEncoder {
         }
       }
 
+      if (codecName.equals("c2.google.av1.encoder")) {
+        // Enable RTC mode in AV1 HW encoder.
+        format.setInteger("vendor.google-av1enc.encoding-preset.int32.value", 1);
+      }
+
       if (isEncodingStatisticsSupported()) {
         format.setInteger(MediaFormat.KEY_VIDEO_ENCODING_STATISTICS_LEVEL,
             MediaFormat.VIDEO_ENCODING_STATISTICS_LEVEL_1);
@@ -282,9 +289,7 @@ class HardwareVideoEncoder implements VideoEncoder {
         textureEglBase.makeCurrent();
       }
 
-      MediaFormat inputFormat = codec.getInputFormat();
-      stride = getStride(inputFormat, width);
-      sliceHeight = getSliceHeight(inputFormat, height);
+      updateInputFormat(codec.getInputFormat());
 
       codec.start();
     } catch (IllegalStateException e) {
@@ -351,8 +356,7 @@ class HardwareVideoEncoder implements VideoEncoder {
       return VideoCodecStatus.UNINITIALIZED;
     }
 
-    final VideoFrame.Buffer videoFrameBuffer = videoFrame.getBuffer();
-    final boolean isTextureBuffer = videoFrameBuffer instanceof VideoFrame.TextureBuffer;
+    final boolean isTextureBuffer = videoFrame.getBuffer() instanceof VideoFrame.TextureBuffer;
 
     // If input resolution changed, restart the codec with the new resolution.
     final int frameWidth = videoFrame.getBuffer().getWidth();
@@ -382,9 +386,6 @@ class HardwareVideoEncoder implements VideoEncoder {
       requestKeyFrame(videoFrame.getTimestampNs());
     }
 
-    // Number of bytes in the video buffer. Y channel is sampled at one byte per pixel; U and V are
-    // subsampled at one byte per four pixels.
-    int bufferSize = videoFrameBuffer.getHeight() * videoFrameBuffer.getWidth() * 3 / 2;
     EncodedImage.Builder builder = EncodedImage.builder()
                                        .setCaptureTimeNs(videoFrame.getTimestampNs())
                                        .setEncodedWidth(videoFrame.getBuffer().getWidth())
@@ -402,8 +403,7 @@ class HardwareVideoEncoder implements VideoEncoder {
     if (useSurfaceMode) {
       returnValue = encodeTextureBuffer(videoFrame, presentationTimestampUs);
     } else {
-      returnValue =
-          encodeByteBuffer(videoFrame, presentationTimestampUs, videoFrameBuffer, bufferSize);
+      returnValue = encodeByteBuffer(videoFrame, presentationTimestampUs);
     }
 
     // Check if the queue was successful.
@@ -434,8 +434,7 @@ class HardwareVideoEncoder implements VideoEncoder {
     return VideoCodecStatus.OK;
   }
 
-  private VideoCodecStatus encodeByteBuffer(VideoFrame videoFrame, long presentationTimestampUs,
-      VideoFrame.Buffer videoFrameBuffer, int bufferSize) {
+  private VideoCodecStatus encodeByteBuffer(VideoFrame videoFrame, long presentationTimestampUs) {
     encodeThreadChecker.checkIsOnValidThread();
     // No timeout.  Don't block for an input buffer, drop frames if the encoder falls behind.
     int index;
@@ -459,11 +458,19 @@ class HardwareVideoEncoder implements VideoEncoder {
       Logging.e(TAG, "getInputBuffer with index=" + index + " failed", e);
       return VideoCodecStatus.ERROR;
     }
-    fillInputBuffer(buffer, videoFrameBuffer);
+
+    if (buffer.capacity() < frameSizeBytes) {
+      Logging.e(TAG,
+          "Input buffer size: " + buffer.capacity()
+              + " is smaller than frame size: " + frameSizeBytes);
+      return VideoCodecStatus.ERROR;
+    }
+
+    fillInputBuffer(buffer, videoFrame.getBuffer());
 
     try {
       codec.queueInputBuffer(
-          index, 0 /* offset */, bufferSize, presentationTimestampUs, 0 /* flags */);
+          index, 0 /* offset */, frameSizeBytes, presentationTimestampUs, 0 /* flags */);
     } catch (IllegalStateException e) {
       Logging.e(TAG, "queueInputBuffer failed", e);
       // IllegalStateException thrown when the codec is in the wrong state.
@@ -606,6 +613,15 @@ class HardwareVideoEncoder implements VideoEncoder {
         Logging.d(TAG, "Sync frame generated");
       }
 
+      // Extract QP before releasing output buffer.
+      Integer qp = null;
+      if (isEncodingStatisticsEnabled) {
+        MediaFormat format = codec.getOutputFormat(index);
+        if (format != null && format.containsKey(MediaFormat.KEY_VIDEO_QP_AVERAGE)) {
+          qp = format.getInteger(MediaFormat.KEY_VIDEO_QP_AVERAGE);
+        }
+      }
+
       final ByteBuffer frameBuffer;
       final Runnable releaseCallback;
       if (isKeyFrame && configBuffer != null) {
@@ -639,15 +655,9 @@ class HardwareVideoEncoder implements VideoEncoder {
                                                           : EncodedImage.FrameType.VideoFrameDelta;
 
       EncodedImage.Builder builder = outputBuilders.poll();
-      builder.setBuffer(frameBuffer, releaseCallback).setFrameType(frameType);
-
-      if (isEncodingStatisticsEnabled) {
-        MediaFormat format = codec.getOutputFormat(index);
-        if (format != null && format.containsKey(MediaFormat.KEY_VIDEO_QP_AVERAGE)) {
-          int qp = format.getInteger(MediaFormat.KEY_VIDEO_QP_AVERAGE);
-          builder.setQp(qp);
-        }
-      }
+      builder.setBuffer(frameBuffer, releaseCallback);
+      builder.setFrameType(frameType);
+      builder.setQp(qp);
 
       EncodedImage encodedImage = builder.createEncodedImage();
       // TODO(mellem):  Set codec-specific info.
@@ -697,20 +707,37 @@ class HardwareVideoEncoder implements VideoEncoder {
     return sharedContext != null && surfaceColorFormat != null;
   }
 
-  private static int getStride(MediaFormat inputFormat, int width) {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && inputFormat != null
-        && inputFormat.containsKey(MediaFormat.KEY_STRIDE)) {
-      return inputFormat.getInteger(MediaFormat.KEY_STRIDE);
-    }
-    return width;
-  }
+  /** Fetches stride and slice height from input media format */
+  private void updateInputFormat(MediaFormat format) {
+    stride = width;
+    sliceHeight = height;
 
-  private static int getSliceHeight(MediaFormat inputFormat, int height) {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && inputFormat != null
-        && inputFormat.containsKey(MediaFormat.KEY_SLICE_HEIGHT)) {
-      return inputFormat.getInteger(MediaFormat.KEY_SLICE_HEIGHT);
+    if (format != null) {
+      if (format.containsKey(MediaFormat.KEY_STRIDE)) {
+        stride = format.getInteger(MediaFormat.KEY_STRIDE);
+        stride = Math.max(stride, width);
+      }
+
+      if (format.containsKey(MediaFormat.KEY_SLICE_HEIGHT)) {
+        sliceHeight = format.getInteger(MediaFormat.KEY_SLICE_HEIGHT);
+        sliceHeight = Math.max(sliceHeight, height);
+      }
     }
-    return height;
+
+    isSemiPlanar = isSemiPlanar(yuvColorFormat);
+    if (isSemiPlanar) {
+      int chromaHeight = (height + 1) / 2;
+      frameSizeBytes = sliceHeight * stride + chromaHeight * stride;
+    } else {
+      int chromaStride = (stride + 1) / 2;
+      int chromaSliceHeight = (sliceHeight + 1) / 2;
+      frameSizeBytes = sliceHeight * stride + chromaSliceHeight * chromaStride * 2;
+    }
+
+    Logging.d(TAG,
+        "updateInputFormat format: " + format + " stride: " + stride
+            + " sliceHeight: " + sliceHeight + " isSemiPlanar: " + isSemiPlanar
+            + " frameSizeBytes: " + frameSizeBytes);
   }
 
   protected boolean isEncodingStatisticsSupported() {
@@ -737,61 +764,30 @@ class HardwareVideoEncoder implements VideoEncoder {
   }
 
   // Visible for testing.
-  protected void fillInputBuffer(ByteBuffer buffer, VideoFrame.Buffer videoFrameBuffer) {
-    yuvFormat.fillBuffer(buffer, videoFrameBuffer, stride, sliceHeight);
+  protected void fillInputBuffer(ByteBuffer buffer, VideoFrame.Buffer frame) {
+    VideoFrame.I420Buffer i420 = frame.toI420();
+    if (isSemiPlanar) {
+      YuvHelper.I420ToNV12(i420.getDataY(), i420.getStrideY(), i420.getDataU(), i420.getStrideU(),
+          i420.getDataV(), i420.getStrideV(), buffer, i420.getWidth(), i420.getHeight(), stride,
+          sliceHeight);
+    } else {
+      YuvHelper.I420Copy(i420.getDataY(), i420.getStrideY(), i420.getDataU(), i420.getStrideU(),
+          i420.getDataV(), i420.getStrideV(), buffer, i420.getWidth(), i420.getHeight(), stride,
+          sliceHeight);
+    }
+    i420.release();
   }
 
-  /**
-   * Enumeration of supported YUV color formats used for MediaCodec's input.
-   */
-  private enum YuvFormat {
-    I420 {
-      @Override
-      void fillBuffer(
-          ByteBuffer dstBuffer, VideoFrame.Buffer srcBuffer, int dstStrideY, int dstSliceHeightY) {
-        /*
-         * According to the docs in Android MediaCodec, the stride of the U and V planes can be
-         * calculated based on the color format, though it is generally undefined and depends on the
-         * device and release.
-         * <p/> Assuming the width and height, dstStrideY and dstSliceHeightY are
-         * even, it works fine when we define the stride and slice-height of the dst U/V plane to be
-         * half of the dst Y plane.
-         */
-        int dstStrideU = dstStrideY / 2;
-        int dstSliceHeight = dstSliceHeightY / 2;
-        VideoFrame.I420Buffer i420 = srcBuffer.toI420();
-        YuvHelper.I420Copy(i420.getDataY(), i420.getStrideY(), i420.getDataU(), i420.getStrideU(),
-            i420.getDataV(), i420.getStrideV(), dstBuffer, i420.getWidth(), i420.getHeight(),
-            dstStrideY, dstSliceHeightY, dstStrideU, dstSliceHeight);
-        i420.release();
-      }
-    },
-    NV12 {
-      @Override
-      void fillBuffer(
-          ByteBuffer dstBuffer, VideoFrame.Buffer srcBuffer, int dstStrideY, int dstSliceHeightY) {
-        VideoFrame.I420Buffer i420 = srcBuffer.toI420();
-        YuvHelper.I420ToNV12(i420.getDataY(), i420.getStrideY(), i420.getDataU(), i420.getStrideU(),
-            i420.getDataV(), i420.getStrideV(), dstBuffer, i420.getWidth(), i420.getHeight(),
-            dstStrideY, dstSliceHeightY);
-        i420.release();
-      }
-    };
-
-    abstract void fillBuffer(
-        ByteBuffer dstBuffer, VideoFrame.Buffer srcBuffer, int dstStrideY, int dstSliceHeightY);
-
-    static YuvFormat valueOf(int colorFormat) {
-      switch (colorFormat) {
-        case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Planar:
-          return I420;
-        case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar:
-        case MediaCodecInfo.CodecCapabilities.COLOR_QCOM_FormatYUV420SemiPlanar:
-        case MediaCodecUtils.COLOR_QCOM_FORMATYUV420PackedSemiPlanar32m:
-          return NV12;
-        default:
-          throw new IllegalArgumentException("Unsupported colorFormat: " + colorFormat);
-      }
+  protected boolean isSemiPlanar(int colorFormat) {
+    switch (colorFormat) {
+      case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Planar:
+        return false;
+      case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar:
+      case MediaCodecInfo.CodecCapabilities.COLOR_QCOM_FormatYUV420SemiPlanar:
+      case MediaCodecUtils.COLOR_QCOM_FORMATYUV420PackedSemiPlanar32m:
+        return true;
+      default:
+        throw new IllegalArgumentException("Unsupported colorFormat: " + colorFormat);
     }
   }
 }

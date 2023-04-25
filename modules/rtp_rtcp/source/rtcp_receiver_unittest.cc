@@ -549,15 +549,14 @@ TEST(RtcpReceiverTest,
 
   EXPECT_THAT(
       receiver.GetLatestReportBlockData(),
-      UnorderedElementsAre(
-          Property(
-              &ReportBlockData::report_block,
-              AllOf(Field(&RTCPReportBlock::source_ssrc, kReceiverMainSsrc),
-                    Field(&RTCPReportBlock::sender_ssrc, kSenderSsrc2),
-                    Field(&RTCPReportBlock::fraction_lost, kFracLost[1]),
-                    Field(&RTCPReportBlock::packets_lost, kCumLost[1]),
-                    Field(&RTCPReportBlock::extended_highest_sequence_number,
-                          kSequenceNumbers[1])))));
+      UnorderedElementsAre(Property(
+          &ReportBlockData::report_block,
+          AllOf(Field(&RTCPReportBlock::source_ssrc, kReceiverMainSsrc),
+                Field(&RTCPReportBlock::sender_ssrc, kSenderSsrc2),
+                Field(&RTCPReportBlock::fraction_lost, kFracLost[1]),
+                Field(&RTCPReportBlock::packets_lost, kCumLost[1]),
+                Field(&RTCPReportBlock::extended_highest_sequence_number,
+                      kSequenceNumbers[1])))));
 }
 
 TEST(RtcpReceiverTest, GetRtt) {
@@ -1579,8 +1578,7 @@ TEST(RtcpReceiverTest,
         EXPECT_EQ(rtcp_block.source_ssrc(), report_block.source_ssrc);
         EXPECT_EQ(kSenderSsrc, report_block.sender_ssrc);
         EXPECT_EQ(rtcp_block.fraction_lost(), report_block.fraction_lost);
-        EXPECT_EQ(rtcp_block.cumulative_lost_signed(),
-                  report_block.packets_lost);
+        EXPECT_EQ(rtcp_block.cumulative_lost(), report_block.packets_lost);
         EXPECT_EQ(rtcp_block.extended_high_seq_num(),
                   report_block.extended_highest_sequence_number);
         EXPECT_EQ(rtcp_block.jitter(), report_block.jitter);

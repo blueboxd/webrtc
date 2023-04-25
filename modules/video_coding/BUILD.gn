@@ -308,8 +308,6 @@ rtc_library("video_coding_legacy") {
   visibility = [ ":video_coding_unittests" ]
   sources = [
     "include/video_coding.h",
-    "jitter_buffer.cc",
-    "jitter_buffer.h",
     "receiver.cc",
     "receiver.h",
     "video_coding_impl.cc",
@@ -351,6 +349,7 @@ rtc_library("video_coding_legacy") {
     "deprecated:deprecated_decoding_state",
     "deprecated:deprecated_event_wrapper",
     "deprecated:deprecated_frame_buffer",
+    "deprecated:deprecated_jitter_buffer",
     "deprecated:deprecated_jitter_buffer_common",
     "deprecated:deprecated_packet",
     "deprecated:deprecated_session_info",
@@ -1065,7 +1064,15 @@ if (rtc_include_tests) {
     ]
 
     if (is_android) {
-      deps += [ ":android_codec_factory_helper" ]
+      use_default_launcher = false
+      deps += [
+        ":android_codec_factory_helper",
+        "../../sdk/android:hwcodecs_java",
+        "//modules/audio_device:audio_device_java",
+        "//sdk/android:native_test_jni_onload",
+        "//testing/android/native_test:native_test_support",
+      ]
+      shard_timeout = 900
     }
 
     absl_deps = [ "//third_party/abseil-cpp/absl/functional:any_invocable" ]
@@ -1198,7 +1205,6 @@ if (rtc_include_tests) {
       "h264_sprop_parameter_sets_unittest.cc",
       "h264_sps_pps_tracker_unittest.cc",
       "histogram_unittest.cc",
-      "jitter_buffer_unittest.cc",
       "loss_notification_controller_unittest.cc",
       "nack_requester_unittest.cc",
       "packet_buffer_unittest.cc",
@@ -1206,8 +1212,6 @@ if (rtc_include_tests) {
       "rtp_frame_reference_finder_unittest.cc",
       "rtp_vp8_ref_finder_unittest.cc",
       "rtp_vp9_ref_finder_unittest.cc",
-      "test/stream_generator.cc",
-      "test/stream_generator.h",
       "utility/bandwidth_quality_scaler_unittest.cc",
       "utility/decoded_frames_history_unittest.cc",
       "utility/frame_dropper_unittest.cc",
@@ -1326,6 +1330,7 @@ if (rtc_include_tests) {
       "deprecated:deprecated_jitter_buffer_common",
       "deprecated:deprecated_packet",
       "deprecated:deprecated_session_info",
+      "deprecated:deprecated_stream_generator",
       "svc:scalability_structure_tests",
       "svc:svc_rate_allocator_tests",
       "timing:jitter_estimator",
