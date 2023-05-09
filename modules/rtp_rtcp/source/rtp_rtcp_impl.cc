@@ -113,15 +113,15 @@ void ModuleRtpRtcpImpl::Process() {
     // `process_rtt` first.
     if (process_rtt && rtt_stats_ != nullptr &&
         rtcp_receiver_.LastReceivedReportBlockMs() > last_rtt_process_time_) {
-      int64_t max_rtt_ms = 0;
+      TimeDelta max_rtt = TimeDelta::Zero();
       for (const auto& block : rtcp_receiver_.GetLatestReportBlockData()) {
-        if (block.last_rtt_ms() > max_rtt_ms) {
-          max_rtt_ms = block.last_rtt_ms();
+        if (block.last_rtt() > max_rtt) {
+          max_rtt = block.last_rtt();
         }
       }
       // Report the rtt.
-      if (max_rtt_ms > 0) {
-        rtt_stats_->OnRttUpdate(max_rtt_ms);
+      if (max_rtt > TimeDelta::Zero()) {
+        rtt_stats_->OnRttUpdate(max_rtt.ms());
       }
     }
 
@@ -350,7 +350,7 @@ bool ModuleRtpRtcpImpl::OnSendingRtpFrame(uint32_t timestamp,
   return true;
 }
 
-bool ModuleRtpRtcpImpl::TrySendPacket(RtpPacketToSend* packet,
+bool ModuleRtpRtcpImpl::TrySendPacket(std::unique_ptr<RtpPacketToSend> packet,
                                       const PacedPacketInfo& pacing_info) {
   RTC_DCHECK(rtp_sender_);
   // TODO(sprang): Consider if we can remove this check.
@@ -372,7 +372,7 @@ bool ModuleRtpRtcpImpl::TrySendPacket(RtpPacketToSend* packet,
       rtp_sender_->sequencer_.Sequence(*packet);
     }
   }
-  rtp_sender_->packet_sender.SendPacket(packet, pacing_info);
+  rtp_sender_->packet_sender.SendPacket(packet.get(), pacing_info);
   return true;
 }
 

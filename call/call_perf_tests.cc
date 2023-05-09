@@ -298,8 +298,7 @@ void CallPerfTest::TestAudioVideoSync(FecMode fec,
     video_receive_configs_[0].sync_group = kSyncGroup;
 
     AudioReceiveStreamInterface::Config audio_recv_config;
-    audio_recv_config.rtp.remote_ssrc =
-        test::VideoTestConstants::kAudioSendSsrc;
+    audio_recv_config.rtp.remote_ssrc = kAudioSendSsrc;
     audio_recv_config.rtp.local_ssrc = kAudioRecvSsrc;
     audio_recv_config.rtcp_send_transport = receive_transport.get();
     audio_recv_config.sync_group = kSyncGroup;

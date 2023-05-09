@@ -228,7 +228,8 @@ class RtpRtcpImplTest : public ::testing::Test {
     const uint8_t payload[100] = {0};
     EXPECT_TRUE(module->impl_->OnSendingRtpFrame(0, 0, kPayloadType, true));
     EXPECT_TRUE(sender->SendVideo(kPayloadType, VideoCodecType::kVideoCodecVP8,
-                                  0, 0, payload, rtp_video_header, 0, {}));
+                                  0, 0, payload, sizeof(payload),
+                                  rtp_video_header, 0, {}));
   }
 
   void IncomingRtcpNack(const RtpRtcpModule* module, uint16_t sequence_number) {
@@ -562,7 +563,8 @@ TEST_F(RtpRtcpImplTest, StoresPacketInfoForSentPackets) {
   packet.SetTimestamp(1);
   packet.set_first_packet_of_frame(true);
   packet.SetMarker(true);
-  sender_.impl_->TrySendPacket(&packet, pacing_info);
+  sender_.impl_->TrySendPacket(std::make_unique<RtpPacketToSend>(packet),
+                               pacing_info);
 
   std::vector<RtpSequenceNumberMap::Info> seqno_info =
       sender_.impl_->GetSentRtpPacketInfos(std::vector<uint16_t>{1});
@@ -576,13 +578,16 @@ TEST_F(RtpRtcpImplTest, StoresPacketInfoForSentPackets) {
   packet.SetTimestamp(2);
   packet.set_first_packet_of_frame(true);
   packet.SetMarker(false);
-  sender_.impl_->TrySendPacket(&packet, pacing_info);
+  sender_.impl_->TrySendPacket(std::make_unique<RtpPacketToSend>(packet),
+                               pacing_info);
 
   packet.set_first_packet_of_frame(false);
-  sender_.impl_->TrySendPacket(&packet, pacing_info);
+  sender_.impl_->TrySendPacket(std::make_unique<RtpPacketToSend>(packet),
+                               pacing_info);
 
   packet.SetMarker(true);
-  sender_.impl_->TrySendPacket(&packet, pacing_info);
+  sender_.impl_->TrySendPacket(std::make_unique<RtpPacketToSend>(packet),
+                               pacing_info);
 
   seqno_info =
       sender_.impl_->GetSentRtpPacketInfos(std::vector<uint16_t>{2, 3, 4});

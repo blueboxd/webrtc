@@ -1386,6 +1386,8 @@ bool WebRtcVideoChannel::AddSendStream(const StreamParams& sp) {
   config.crypto_options = crypto_options_;
   config.rtp.extmap_allow_mixed = ExtmapAllowMixed();
   config.rtcp_report_interval_ms = video_config_.rtcp_report_interval_ms;
+  config.rtp.enable_send_packet_batching =
+      video_config_.enable_send_packet_batching;
 
   WebRtcVideoSendStream* stream = new WebRtcVideoSendStream(
       call_, sp, std::move(config), default_send_options_,
@@ -2786,16 +2788,12 @@ WebRtcVideoChannel::WebRtcVideoSendStream::GetPerLayerVideoSenderInfos(
         stream_stats.rtp_stats.retransmitted.payload_bytes;
     info.retransmitted_packets_sent =
         stream_stats.rtp_stats.retransmitted.packets;
-    info.firs_rcvd = stream_stats.rtcp_packet_type_counts.fir_packets;
-    info.nacks_rcvd = stream_stats.rtcp_packet_type_counts.nack_packets;
-    info.plis_rcvd = stream_stats.rtcp_packet_type_counts.pli_packets;
+    info.firs_received = stream_stats.rtcp_packet_type_counts.fir_packets;
+    info.nacks_received = stream_stats.rtcp_packet_type_counts.nack_packets;
+    info.plis_received = stream_stats.rtcp_packet_type_counts.pli_packets;
     if (stream_stats.report_block_data.has_value()) {
-      info.packets_lost =
-          stream_stats.report_block_data->report_block().packets_lost;
-      info.fraction_lost =
-          static_cast<float>(
-              stream_stats.report_block_data->report_block().fraction_lost) /
-          (1 << 8);
+      info.packets_lost = stream_stats.report_block_data->cumulative_lost();
+      info.fraction_lost = stream_stats.report_block_data->fraction_lost();
       info.report_block_datas.push_back(*stream_stats.report_block_data);
     }
     info.qp_sum = stream_stats.qp_sum;
@@ -2838,9 +2836,9 @@ WebRtcVideoChannel::WebRtcVideoSendStream::GetAggregatedVideoSenderInfo(
       info.send_frame_width = infos[i].send_frame_width;
     if (infos[i].send_frame_height > info.send_frame_height)
       info.send_frame_height = infos[i].send_frame_height;
-    info.firs_rcvd += infos[i].firs_rcvd;
-    info.nacks_rcvd += infos[i].nacks_rcvd;
-    info.plis_rcvd += infos[i].plis_rcvd;
+    info.firs_received += infos[i].firs_received;
+    info.nacks_received += infos[i].nacks_received;
+    info.plis_received += infos[i].plis_received;
     if (infos[i].report_block_datas.size())
       info.report_block_datas.push_back(infos[i].report_block_datas[0]);
     if (infos[i].qp_sum) {
@@ -3301,15 +3299,15 @@ WebRtcVideoChannel::WebRtcVideoReceiveStream::GetVideoReceiverInfo(
     if (decoder_it != config_.decoders.end())
       info.codec_name = decoder_it->video_format.name;
   }
-  info.payload_bytes_rcvd = stats.rtp_stats.packet_counter.payload_bytes;
-  info.header_and_padding_bytes_rcvd =
+  info.payload_bytes_received = stats.rtp_stats.packet_counter.payload_bytes;
+  info.header_and_padding_bytes_received =
       stats.rtp_stats.packet_counter.header_bytes +
       stats.rtp_stats.packet_counter.padding_bytes;
-  info.packets_rcvd = stats.rtp_stats.packet_counter.packets;
+  info.packets_received = stats.rtp_stats.packet_counter.packets;
   info.packets_lost = stats.rtp_stats.packets_lost;
   info.jitter_ms = stats.rtp_stats.jitter / (kVideoCodecClockrate / 1000);
 
-  info.framerate_rcvd = stats.network_frame_rate;
+  info.framerate_received = stats.network_frame_rate;
   info.framerate_decoded = stats.decode_frame_rate;
   info.framerate_output = stats.render_frame_rate;
   info.frame_width = stats.width;
@@ -3363,6 +3361,20 @@ WebRtcVideoChannel::WebRtcVideoReceiveStream::GetVideoReceiverInfo(
   // TODO(bugs.webrtc.org/10662): Add stats for LNTF.
 
   info.timing_frame_info = stats.timing_frame_info;
+
+  if (stats.rtx_rtp_stats.has_value()) {
+    info.retransmitted_packets_received =
+        stats.rtx_rtp_stats->packet_counter.packets;
+    info.retransmitted_bytes_received =
+        stats.rtx_rtp_stats->packet_counter.payload_bytes;
+    // RTX information gets added to primary counters.
+    info.payload_bytes_received +=
+        stats.rtx_rtp_stats->packet_counter.payload_bytes;
+    info.header_and_padding_bytes_received +=
+        stats.rtx_rtp_stats->packet_counter.header_bytes +
+        stats.rtx_rtp_stats->packet_counter.padding_bytes;
+    info.packets_received += stats.rtx_rtp_stats->packet_counter.packets;
+  }
 
   if (log_stats)
     RTC_LOG(LS_INFO) << stats.ToString(rtc::TimeMillis());

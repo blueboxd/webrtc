@@ -2020,17 +2020,17 @@ TEST_F(WebRtcVideoChannelBaseTest, GetStats) {
   EXPECT_TRUE(channel_->GetReceiveStats(&receive_info));
 
   ASSERT_EQ(1U, send_info.senders.size());
-  // TODO(whyuan): bytes_sent and bytes_rcvd are different. Are both payload?
-  // For webrtc, bytes_sent does not include the RTP header length.
+  // TODO(whyuan): bytes_sent and bytes_received are different. Are both
+  // payload? For webrtc, bytes_sent does not include the RTP header length.
   EXPECT_EQ(send_info.senders[0].payload_bytes_sent,
             NumRtpBytes() - kRtpHeaderSize * NumRtpPackets());
   EXPECT_EQ(NumRtpPackets(), send_info.senders[0].packets_sent);
   EXPECT_EQ(0.0, send_info.senders[0].fraction_lost);
   ASSERT_TRUE(send_info.senders[0].codec_payload_type);
   EXPECT_EQ(DefaultCodec().id, *send_info.senders[0].codec_payload_type);
-  EXPECT_EQ(0, send_info.senders[0].firs_rcvd);
-  EXPECT_EQ(0, send_info.senders[0].plis_rcvd);
-  EXPECT_EQ(0u, send_info.senders[0].nacks_rcvd);
+  EXPECT_EQ(0, send_info.senders[0].firs_received);
+  EXPECT_EQ(0, send_info.senders[0].plis_received);
+  EXPECT_EQ(0u, send_info.senders[0].nacks_received);
   EXPECT_EQ(kVideoWidth, send_info.senders[0].send_frame_width);
   EXPECT_EQ(kVideoHeight, send_info.senders[0].send_frame_height);
   EXPECT_GT(send_info.senders[0].framerate_input, 0);
@@ -2048,8 +2048,8 @@ TEST_F(WebRtcVideoChannelBaseTest, GetStats) {
   ASSERT_TRUE(receive_info.receivers[0].codec_payload_type);
   EXPECT_EQ(DefaultCodec().id, *receive_info.receivers[0].codec_payload_type);
   EXPECT_EQ(NumRtpBytes() - kRtpHeaderSize * NumRtpPackets(),
-            receive_info.receivers[0].payload_bytes_rcvd);
-  EXPECT_EQ(NumRtpPackets(), receive_info.receivers[0].packets_rcvd);
+            receive_info.receivers[0].payload_bytes_received);
+  EXPECT_EQ(NumRtpPackets(), receive_info.receivers[0].packets_received);
   EXPECT_EQ(0, receive_info.receivers[0].packets_lost);
   // TODO(asapersson): Not set for webrtc. Handle missing stats.
   // EXPECT_EQ(0, receive_info.receivers[0].packets_concealed);
@@ -2058,7 +2058,7 @@ TEST_F(WebRtcVideoChannelBaseTest, GetStats) {
   EXPECT_EQ(0U, receive_info.receivers[0].nacks_sent);
   EXPECT_EQ(kVideoWidth, receive_info.receivers[0].frame_width);
   EXPECT_EQ(kVideoHeight, receive_info.receivers[0].frame_height);
-  EXPECT_GT(receive_info.receivers[0].framerate_rcvd, 0);
+  EXPECT_GT(receive_info.receivers[0].framerate_received, 0);
   EXPECT_GT(receive_info.receivers[0].framerate_decoded, 0);
   EXPECT_GT(receive_info.receivers[0].framerate_output, 0);
 
@@ -2100,8 +2100,8 @@ TEST_F(WebRtcVideoChannelBaseTest, GetStatsMultipleRecvStreams) {
   EXPECT_TRUE(channel_->GetReceiveStats(&receive_info));
 
   ASSERT_EQ(1U, send_info.senders.size());
-  // TODO(whyuan): bytes_sent and bytes_rcvd are different. Are both payload?
-  // For webrtc, bytes_sent does not include the RTP header length.
+  // TODO(whyuan): bytes_sent and bytes_received are different. Are both
+  // payload? For webrtc, bytes_sent does not include the RTP header length.
   EXPECT_EQ(NumRtpBytes() - kRtpHeaderSize * NumRtpPackets(),
             GetSenderStats(0).payload_bytes_sent);
   EXPECT_EQ(NumRtpPackets(), GetSenderStats(0).packets_sent);
@@ -2113,8 +2113,8 @@ TEST_F(WebRtcVideoChannelBaseTest, GetStatsMultipleRecvStreams) {
     EXPECT_EQ(1U, GetReceiverStats(i).ssrcs().size());
     EXPECT_EQ(i + 1, GetReceiverStats(i).ssrcs()[0]);
     EXPECT_EQ(NumRtpBytes() - kRtpHeaderSize * NumRtpPackets(),
-              GetReceiverStats(i).payload_bytes_rcvd);
-    EXPECT_EQ(NumRtpPackets(), GetReceiverStats(i).packets_rcvd);
+              GetReceiverStats(i).payload_bytes_received);
+    EXPECT_EQ(NumRtpPackets(), GetReceiverStats(i).packets_received);
     EXPECT_EQ(kVideoWidth, GetReceiverStats(i).frame_width);
     EXPECT_EQ(kVideoHeight, GetReceiverStats(i).frame_height);
   }
@@ -5793,9 +5793,9 @@ TEST_F(WebRtcVideoChannelTest, GetAggregatedStatsReportWithoutSubStreams) {
   EXPECT_EQ(sender.encoder_implementation_name,
             stats.encoder_implementation_name);
   // Comes from substream only.
-  EXPECT_EQ(sender.firs_rcvd, 0);
-  EXPECT_EQ(sender.plis_rcvd, 0);
-  EXPECT_EQ(sender.nacks_rcvd, 0u);
+  EXPECT_EQ(sender.firs_received, 0);
+  EXPECT_EQ(sender.plis_received, 0);
+  EXPECT_EQ(sender.nacks_received, 0u);
   EXPECT_EQ(sender.send_frame_width, 0);
   EXPECT_EQ(sender.send_frame_height, 0);
 
@@ -5900,11 +5900,9 @@ TEST_F(WebRtcVideoChannelTest, GetAggregatedStatsReportForSubStreams) {
   EXPECT_EQ(sender.total_packet_send_delay,
             2 * substream.rtp_stats.transmitted.total_packet_delay);
   EXPECT_EQ(sender.packets_lost,
-            2 * substream.report_block_data->report_block().packets_lost);
-  EXPECT_EQ(sender.fraction_lost,
-            static_cast<float>(
-                substream.report_block_data->report_block().fraction_lost) /
-                (1 << 8));
+            2 * substream.report_block_data->cumulative_lost());
+  EXPECT_FLOAT_EQ(sender.fraction_lost,
+                  substream.report_block_data->fraction_lost());
   EXPECT_EQ(sender.rtt_ms, 0);
   EXPECT_EQ(sender.codec_name, DefaultCodec().name);
   EXPECT_EQ(sender.codec_payload_type, DefaultCodec().id);
@@ -5920,12 +5918,12 @@ TEST_F(WebRtcVideoChannelTest, GetAggregatedStatsReportForSubStreams) {
   EXPECT_EQ(sender.encoder_implementation_name,
             stats.encoder_implementation_name);
   EXPECT_EQ(
-      sender.firs_rcvd,
+      sender.firs_received,
       static_cast<int>(2 * substream.rtcp_packet_type_counts.fir_packets));
   EXPECT_EQ(
-      sender.plis_rcvd,
+      sender.plis_received,
       static_cast<int>(2 * substream.rtcp_packet_type_counts.pli_packets));
-  EXPECT_EQ(sender.nacks_rcvd,
+  EXPECT_EQ(sender.nacks_received,
             2 * substream.rtcp_packet_type_counts.nack_packets);
   EXPECT_EQ(sender.send_frame_width, substream.width);
   EXPECT_EQ(sender.send_frame_height, substream.height);
@@ -6026,11 +6024,9 @@ TEST_F(WebRtcVideoChannelTest, GetPerLayerStatsReportForSubStreams) {
   EXPECT_EQ(sender.retransmitted_packets_sent,
             substream.rtp_stats.retransmitted.packets);
   EXPECT_EQ(sender.packets_lost,
-            substream.report_block_data->report_block().packets_lost);
-  EXPECT_EQ(sender.fraction_lost,
-            static_cast<float>(
-                substream.report_block_data->report_block().fraction_lost) /
-                (1 << 8));
+            substream.report_block_data->cumulative_lost());
+  EXPECT_FLOAT_EQ(sender.fraction_lost,
+                  substream.report_block_data->fraction_lost());
   EXPECT_EQ(sender.rtt_ms, 0);
   EXPECT_EQ(sender.codec_name, DefaultCodec().name);
   EXPECT_EQ(sender.codec_payload_type, DefaultCodec().id);
@@ -6045,11 +6041,12 @@ TEST_F(WebRtcVideoChannelTest, GetPerLayerStatsReportForSubStreams) {
   EXPECT_EQ(sender.ssrc_groups.size(), 0u);
   EXPECT_EQ(sender.encoder_implementation_name,
             stats.encoder_implementation_name);
-  EXPECT_EQ(sender.firs_rcvd,
+  EXPECT_EQ(sender.firs_received,
             static_cast<int>(substream.rtcp_packet_type_counts.fir_packets));
-  EXPECT_EQ(sender.plis_rcvd,
+  EXPECT_EQ(sender.plis_received,
             static_cast<int>(substream.rtcp_packet_type_counts.pli_packets));
-  EXPECT_EQ(sender.nacks_rcvd, substream.rtcp_packet_type_counts.nack_packets);
+  EXPECT_EQ(sender.nacks_received,
+            substream.rtcp_packet_type_counts.nack_packets);
   EXPECT_EQ(sender.send_frame_width, substream.width);
   EXPECT_EQ(sender.send_frame_height, substream.height);
 
@@ -6486,17 +6483,17 @@ TEST_F(WebRtcVideoChannelTest, GetStatsTranslatesSendRtcpPacketTypesCorrectly) {
   EXPECT_TRUE(channel_->GetSendStats(&send_info));
   EXPECT_TRUE(channel_->GetReceiveStats(&receive_info));
 
-  EXPECT_EQ(2, send_info.senders[0].firs_rcvd);
-  EXPECT_EQ(3u, send_info.senders[0].nacks_rcvd);
-  EXPECT_EQ(4, send_info.senders[0].plis_rcvd);
+  EXPECT_EQ(2, send_info.senders[0].firs_received);
+  EXPECT_EQ(3u, send_info.senders[0].nacks_received);
+  EXPECT_EQ(4, send_info.senders[0].plis_received);
 
-  EXPECT_EQ(5, send_info.senders[1].firs_rcvd);
-  EXPECT_EQ(7u, send_info.senders[1].nacks_rcvd);
-  EXPECT_EQ(9, send_info.senders[1].plis_rcvd);
+  EXPECT_EQ(5, send_info.senders[1].firs_received);
+  EXPECT_EQ(7u, send_info.senders[1].nacks_received);
+  EXPECT_EQ(9, send_info.senders[1].plis_received);
 
-  EXPECT_EQ(7, send_info.aggregated_senders[0].firs_rcvd);
-  EXPECT_EQ(10u, send_info.aggregated_senders[0].nacks_rcvd);
-  EXPECT_EQ(13, send_info.aggregated_senders[0].plis_rcvd);
+  EXPECT_EQ(7, send_info.aggregated_senders[0].firs_received);
+  EXPECT_EQ(10u, send_info.aggregated_senders[0].nacks_received);
+  EXPECT_EQ(13, send_info.aggregated_senders[0].plis_received);
 }
 
 TEST_F(WebRtcVideoChannelTest,
@@ -6547,6 +6544,10 @@ TEST_F(WebRtcVideoChannelTest, GetStatsTranslatesDecodeStatsCorrectly) {
   stats.total_assembly_time = webrtc::TimeDelta::Millis(4);
   stats.frames_assembled_from_multiple_packets = 2;
   stats.power_efficient_decoder = true;
+  webrtc::RtpReceiveStats rtx_stats;
+  rtx_stats.packet_counter.packets = 5;
+  rtx_stats.packet_counter.payload_bytes = 23;
+  stats.rtx_rtp_stats = rtx_stats;
   stream->SetStats(stats);
 
   cricket::VideoMediaSendInfo send_info;
@@ -6585,6 +6586,10 @@ TEST_F(WebRtcVideoChannelTest, GetStatsTranslatesDecodeStatsCorrectly) {
   EXPECT_EQ(stats.frames_assembled_from_multiple_packets,
             receive_info.receivers[0].frames_assembled_from_multiple_packets);
   EXPECT_TRUE(receive_info.receivers[0].power_efficient_decoder);
+  EXPECT_EQ(stats.rtx_rtp_stats->packet_counter.packets,
+            receive_info.receivers[0].retransmitted_packets_received);
+  EXPECT_EQ(stats.rtx_rtp_stats->packet_counter.payload_bytes,
+            receive_info.receivers[0].retransmitted_bytes_received);
 }
 
 TEST_F(WebRtcVideoChannelTest,
@@ -6621,12 +6626,12 @@ TEST_F(WebRtcVideoChannelTest, GetStatsTranslatesReceivePacketStatsCorrectly) {
   EXPECT_TRUE(channel_->GetSendStats(&send_info));
   EXPECT_TRUE(channel_->GetReceiveStats(&receive_info));
 
-  EXPECT_EQ(
-      stats.rtp_stats.packet_counter.payload_bytes,
-      rtc::checked_cast<size_t>(receive_info.receivers[0].payload_bytes_rcvd));
-  EXPECT_EQ(
-      stats.rtp_stats.packet_counter.packets,
-      rtc::checked_cast<unsigned int>(receive_info.receivers[0].packets_rcvd));
+  EXPECT_EQ(stats.rtp_stats.packet_counter.payload_bytes,
+            rtc::checked_cast<size_t>(
+                receive_info.receivers[0].payload_bytes_received));
+  EXPECT_EQ(stats.rtp_stats.packet_counter.packets,
+            rtc::checked_cast<unsigned int>(
+                receive_info.receivers[0].packets_received));
   EXPECT_EQ(stats.rtp_stats.packets_lost,
             receive_info.receivers[0].packets_lost);
 }

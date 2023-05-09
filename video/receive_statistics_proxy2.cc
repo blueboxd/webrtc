@@ -276,7 +276,7 @@ void ReceiveStatisticsProxy::UpdateHistograms(
                                *current_delay_ms);
     log_stream << "WebRTC.Video.CurrentDelayInMs " << *current_delay_ms << '\n';
   }
-  absl::optional<int> delay_ms = delay_counter_.Avg(kMinRequiredSamples);
+  absl::optional<int> delay_ms = oneway_delay_counter_.Avg(kMinRequiredSamples);
   if (delay_ms)
     RTC_HISTOGRAM_COUNTS_10000("WebRTC.Video.OnewayDelayInMs", *delay_ms);
 
@@ -663,14 +663,14 @@ void ReceiveStatisticsProxy::OnDecoderInfo(
 }
 
 void ReceiveStatisticsProxy::OnFrameBufferTimingsUpdated(
-    int max_decode_ms,
+    int estimated_max_decode_time_ms,
     int current_delay_ms,
     int target_delay_ms,
     int jitter_buffer_ms,
     int min_playout_delay_ms,
     int render_delay_ms) {
   RTC_DCHECK_RUN_ON(&main_thread_);
-  stats_.max_decode_ms = max_decode_ms;
+  stats_.max_decode_ms = estimated_max_decode_time_ms;
   stats_.current_delay_ms = current_delay_ms;
   stats_.target_delay_ms = target_delay_ms;
   stats_.jitter_buffer_ms = jitter_buffer_ms;
@@ -679,9 +679,9 @@ void ReceiveStatisticsProxy::OnFrameBufferTimingsUpdated(
   jitter_buffer_delay_counter_.Add(jitter_buffer_ms);
   target_delay_counter_.Add(target_delay_ms);
   current_delay_counter_.Add(current_delay_ms);
-  // Network delay (rtt/2) + target_delay_ms (jitter delay + decode time +
-  // render delay).
-  delay_counter_.Add(target_delay_ms + avg_rtt_ms_ / 2);
+  // Estimated one-way delay: network delay (rtt/2) + target_delay_ms (jitter
+  // delay + decode time + render delay).
+  oneway_delay_counter_.Add(target_delay_ms + avg_rtt_ms_ / 2);
 }
 
 void ReceiveStatisticsProxy::OnUniqueFramesCounted(int num_unique_frames) {

@@ -90,7 +90,7 @@ class ReceiveStatisticsProxy : public VCMReceiveStatisticsCallback,
                        size_t size_bytes,
                        VideoContentType content_type) override;
   void OnDroppedFrames(uint32_t frames_dropped) override;
-  void OnFrameBufferTimingsUpdated(int max_decode_ms,
+  void OnFrameBufferTimingsUpdated(int estimated_max_decode_time_ms,
                                    int current_delay_ms,
                                    int target_delay_ms,
                                    int jitter_buffer_ms,
@@ -175,7 +175,7 @@ class ReceiveStatisticsProxy : public VCMReceiveStatisticsCallback,
   rtc::SampleCounter jitter_buffer_delay_counter_ RTC_GUARDED_BY(main_thread_);
   rtc::SampleCounter target_delay_counter_ RTC_GUARDED_BY(main_thread_);
   rtc::SampleCounter current_delay_counter_ RTC_GUARDED_BY(main_thread_);
-  rtc::SampleCounter delay_counter_ RTC_GUARDED_BY(main_thread_);
+  rtc::SampleCounter oneway_delay_counter_ RTC_GUARDED_BY(main_thread_);
   std::unique_ptr<VideoQualityObserver> video_quality_observer_
       RTC_GUARDED_BY(main_thread_);
   mutable rtc::MovingMaxCounter<int> interframe_delay_max_moving_

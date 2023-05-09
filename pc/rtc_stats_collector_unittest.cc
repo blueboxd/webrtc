@@ -2473,12 +2473,12 @@ TEST_F(RTCStatsCollectorTest, CollectRTCInboundRtpStreamStats_Audio) {
   voice_media_info.receivers[0].local_stats[0].ssrc = 1;
   voice_media_info.receivers[0].packets_lost = -1;  // Signed per RFC3550
   voice_media_info.receivers[0].packets_discarded = 7788;
-  voice_media_info.receivers[0].packets_rcvd = 2;
+  voice_media_info.receivers[0].packets_received = 2;
   voice_media_info.receivers[0].nacks_sent = 5;
   voice_media_info.receivers[0].fec_packets_discarded = 5566;
   voice_media_info.receivers[0].fec_packets_received = 6677;
-  voice_media_info.receivers[0].payload_bytes_rcvd = 3;
-  voice_media_info.receivers[0].header_and_padding_bytes_rcvd = 4;
+  voice_media_info.receivers[0].payload_bytes_received = 3;
+  voice_media_info.receivers[0].header_and_padding_bytes_received = 4;
   voice_media_info.receivers[0].codec_payload_type = 42;
   voice_media_info.receivers[0].jitter_ms = 4500;
   voice_media_info.receivers[0].jitter_buffer_delay_seconds = 1.0;
@@ -2636,10 +2636,10 @@ TEST_F(RTCStatsCollectorTest, CollectRTCInboundRtpStreamStats_Video) {
   video_media_info.receivers[0].local_stats.push_back(
       cricket::SsrcReceiverInfo());
   video_media_info.receivers[0].local_stats[0].ssrc = 1;
-  video_media_info.receivers[0].packets_rcvd = 2;
+  video_media_info.receivers[0].packets_received = 2;
   video_media_info.receivers[0].packets_lost = 42;
-  video_media_info.receivers[0].payload_bytes_rcvd = 3;
-  video_media_info.receivers[0].header_and_padding_bytes_rcvd = 12;
+  video_media_info.receivers[0].payload_bytes_received = 3;
+  video_media_info.receivers[0].header_and_padding_bytes_received = 12;
   video_media_info.receivers[0].codec_payload_type = 42;
   video_media_info.receivers[0].firs_sent = 5;
   video_media_info.receivers[0].plis_sent = 6;
@@ -2667,7 +2667,6 @@ TEST_F(RTCStatsCollectorTest, CollectRTCInboundRtpStreamStats_Video) {
   video_media_info.receivers[0].jitter_buffer_target_delay_seconds = 1.1;
   video_media_info.receivers[0].jitter_buffer_minimum_delay_seconds = 0.999;
   video_media_info.receivers[0].jitter_buffer_emitted_count = 13;
-
   video_media_info.receivers[0].last_packet_received_timestamp_ms =
       absl::nullopt;
   video_media_info.receivers[0].content_type = VideoContentType::UNSPECIFIED;
@@ -2676,10 +2675,12 @@ TEST_F(RTCStatsCollectorTest, CollectRTCInboundRtpStreamStats_Video) {
   video_media_info.receivers[0].decoder_implementation_name = "";
   video_media_info.receivers[0].min_playout_delay_ms = 50;
   video_media_info.receivers[0].power_efficient_decoder = false;
+  video_media_info.receivers[0].retransmitted_packets_received = 17;
+  video_media_info.receivers[0].retransmitted_bytes_received = 62;
 
   // Note: these two values intentionally differ,
   // only the decoded one should show up.
-  video_media_info.receivers[0].framerate_rcvd = 15;
+  video_media_info.receivers[0].framerate_received = 15;
   video_media_info.receivers[0].framerate_decoded = 5;
 
   RtpCodecParameters codec_parameters;
@@ -2741,6 +2742,8 @@ TEST_F(RTCStatsCollectorTest, CollectRTCInboundRtpStreamStats_Video) {
   expected_video.min_playout_delay = 0.05;
   expected_video.frames_per_second = 5;
   expected_video.power_efficient_decoder = false;
+  expected_video.retransmitted_packets_received = 17;
+  expected_video.retransmitted_bytes_received = 62;
 
   ASSERT_TRUE(report->Get(expected_video.id()));
   EXPECT_EQ(
@@ -2848,7 +2851,7 @@ TEST_F(RTCStatsCollectorTest, CollectRTCOutboundRtpStreamStats_Audio) {
   voice_media_info.senders[0].payload_bytes_sent = 3;
   voice_media_info.senders[0].header_and_padding_bytes_sent = 12;
   voice_media_info.senders[0].retransmitted_bytes_sent = 30;
-  voice_media_info.senders[0].nacks_rcvd = 31;
+  voice_media_info.senders[0].nacks_received = 31;
   voice_media_info.senders[0].target_bitrate = 32000;
   voice_media_info.senders[0].codec_payload_type = 42;
   voice_media_info.senders[0].active = true;
@@ -2910,9 +2913,9 @@ TEST_F(RTCStatsCollectorTest, CollectRTCOutboundRtpStreamStats_Video) {
   video_media_info.senders.push_back(cricket::VideoSenderInfo());
   video_media_info.senders[0].local_stats.push_back(cricket::SsrcSenderInfo());
   video_media_info.senders[0].local_stats[0].ssrc = 1;
-  video_media_info.senders[0].firs_rcvd = 2;
-  video_media_info.senders[0].plis_rcvd = 3;
-  video_media_info.senders[0].nacks_rcvd = 4;
+  video_media_info.senders[0].firs_received = 2;
+  video_media_info.senders[0].plis_received = 3;
+  video_media_info.senders[0].nacks_received = 4;
   video_media_info.senders[0].packets_sent = 5;
   video_media_info.senders[0].retransmitted_packets_sent = 50;
   video_media_info.senders[0].payload_bytes_sent = 6;
@@ -3291,7 +3294,7 @@ TEST_F(RTCStatsCollectorTest, CollectNoStreamRTCOutboundRtpStreamStats_Audio) {
   voice_media_info.senders[0].payload_bytes_sent = 3;
   voice_media_info.senders[0].header_and_padding_bytes_sent = 4;
   voice_media_info.senders[0].retransmitted_bytes_sent = 30;
-  voice_media_info.senders[0].nacks_rcvd = 31;
+  voice_media_info.senders[0].nacks_received = 31;
   voice_media_info.senders[0].codec_payload_type = 42;
   voice_media_info.senders[0].active = true;
 
@@ -3553,8 +3556,7 @@ class RTCStatsCollectorTestWithParamKind
         for (const auto& report_block_data : report_block_datas) {
           cricket::VoiceSenderInfo sender;
           sender.local_stats.push_back(cricket::SsrcSenderInfo());
-          sender.local_stats[0].ssrc =
-              report_block_data.report_block().source_ssrc;
+          sender.local_stats[0].ssrc = report_block_data.source_ssrc();
           if (codec.has_value()) {
             sender.codec_payload_type = codec->payload_type;
             voice_media_info.send_codecs.insert(
@@ -3571,8 +3573,7 @@ class RTCStatsCollectorTestWithParamKind
         for (const auto& report_block_data : report_block_datas) {
           cricket::VideoSenderInfo sender;
           sender.local_stats.push_back(cricket::SsrcSenderInfo());
-          sender.local_stats[0].ssrc =
-              report_block_data.report_block().source_ssrc;
+          sender.local_stats[0].ssrc = report_block_data.source_ssrc();
           if (codec.has_value()) {
             sender.codec_payload_type = codec->payload_type;
             video_media_info.send_codecs.insert(

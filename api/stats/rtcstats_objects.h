@@ -425,6 +425,10 @@ class RTC_EXPORT RTCInboundRtpStreamStats final
   RTCStatsMember<uint64_t> fec_packets_discarded;
   RTCStatsMember<uint64_t> bytes_received;
   RTCStatsMember<uint64_t> header_bytes_received;
+  // Inbound RTX stats. Only defined when RTX is used and it is therefore
+  // possible to distinguish retransmissions.
+  RTCStatsMember<uint64_t> retransmitted_packets_received;
+  RTCStatsMember<uint64_t> retransmitted_bytes_received;
   RTCStatsMember<double> last_packet_received_timestamp;
   RTCStatsMember<double> jitter_buffer_delay;
   RTCStatsMember<double> jitter_buffer_target_delay;
@@ -440,7 +444,7 @@ class RTC_EXPORT RTCInboundRtpStreamStats final
   RTCStatsMember<double> total_audio_energy;
   RTCStatsMember<double> total_samples_duration;
   // Stats below are only implemented or defined for video.
-  RTCStatsMember<int32_t> frames_received;
+  RTCStatsMember<uint32_t> frames_received;
   RTCStatsMember<uint32_t> frame_width;
   RTCStatsMember<uint32_t> frame_height;
   RTCStatsMember<double> frames_per_second;
