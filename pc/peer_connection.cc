@@ -1420,9 +1420,10 @@ PeerConnection::CreateDataChannelOrError(const std::string& label,
 
   rtc::scoped_refptr<DataChannelInterface> channel = ret.MoveValue();
 
-  // Trigger the onRenegotiationNeeded event for
-  // the first SCTP DataChannel.
-  if (first_datachannel) {
+  // Check the onRenegotiationNeeded event (with plan-b backward compat)
+  if (configuration_.sdp_semantics == SdpSemantics::kUnifiedPlan ||
+      (configuration_.sdp_semantics == SdpSemantics::kPlanB_DEPRECATED &&
+       first_datachannel)) {
     sdp_handler_->UpdateNegotiationNeeded();
   }
   NoteUsageEvent(UsageEvent::DATA_ADDED);
@@ -2569,7 +2570,8 @@ bool PeerConnection::ValidateBundleSettings(
     const cricket::ContentInfo* content = (&*citer);
     RTC_DCHECK(content != NULL);
     auto it = bundle_groups_by_mid.find(content->name);
-    if (it != bundle_groups_by_mid.end() && !content->rejected &&
+    if (it != bundle_groups_by_mid.end() &&
+        !(content->rejected || content->bundle_only) &&
         content->type == MediaProtocolType::kRtp) {
       if (!HasRtcpMuxEnabled(content))
         return false;

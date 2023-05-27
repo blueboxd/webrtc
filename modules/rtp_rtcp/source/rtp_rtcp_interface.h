@@ -69,9 +69,9 @@ class RtpRtcpInterface : public RtcpFeedbackSenderInterface {
     // Called when the receiver sends a loss notification.
     RtcpLossNotificationObserver* rtcp_loss_notification_observer = nullptr;
 
-    // Called when we receive a changed estimate from the receiver of out
-    // stream.
-    RtcpBandwidthObserver* bandwidth_callback = nullptr;
+    // Called when receive an RTCP message related to the link in general, e.g.
+    // bandwidth estimation related message.
+    NetworkLinkRtcpObserver* network_link_rtcp_observer = nullptr;
 
     NetworkStateEstimateObserver* network_state_estimate_observer = nullptr;
     TransportFeedbackObserver* transport_feedback_callback = nullptr;
@@ -131,13 +131,6 @@ class RtpRtcpInterface : public RtcpFeedbackSenderInterface {
     absl::optional<uint32_t> rtx_send_ssrc;
 
     bool need_rtp_packet_infos = false;
-
-    // If true, the RTP packet history will select RTX packets based on
-    // heuristics such as send time, retransmission count etc, in order to
-    // make padding potentially more useful.
-    // If false, the last packet will always be picked. This may reduce CPU
-    // overhead.
-    bool enable_rtx_padding_prioritization = true;
 
     // Estimate RTT as non-sender as described in
     // https://tools.ietf.org/html/rfc3611#section-4.4 and #section-4.5
@@ -379,12 +372,7 @@ class RtpRtcpInterface : public RtcpFeedbackSenderInterface {
   virtual int32_t SetCNAME(absl::string_view cname) = 0;
 
   // Returns current RTT (round-trip time) estimate.
-  // Returns -1 on failure else 0.
-  virtual int32_t RTT(uint32_t remote_ssrc,
-                      int64_t* rtt,
-                      int64_t* avg_rtt,
-                      int64_t* min_rtt,
-                      int64_t* max_rtt) const = 0;
+  virtual absl::optional<TimeDelta> LastRtt() const = 0;
 
   // Returns the estimated RTT, with fallback to a default value.
   virtual int64_t ExpectedRetransmissionTimeMs() const = 0;

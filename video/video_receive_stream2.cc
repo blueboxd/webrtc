@@ -52,7 +52,7 @@
 #include "system_wrappers/include/clock.h"
 #include "video/call_stats2.h"
 #include "video/frame_dumping_decoder.h"
-#include "video/receive_statistics_proxy2.h"
+#include "video/receive_statistics_proxy.h"
 #include "video/render/incoming_video_stream.h"
 #include "video/task_queue_frame_decode_scheduler.h"
 
@@ -764,6 +764,7 @@ void VideoReceiveStream2::OnEncodedFrame(std::unique_ptr<EncodedFrame> frame) {
       frame->FrameType() == VideoFrameType::kVideoFrameKey;
 
   // Current OnPreDecode only cares about QP for VP8.
+  // TODO(brandtr): Move to stats_proxy_.OnDecodableFrame in VSBC, or deprecate.
   int qp = -1;
   if (frame->CodecSpecific()->codecType == kVideoCodecVP8) {
     if (!vp8::GetQp(frame->data(), frame->size(), &qp)) {

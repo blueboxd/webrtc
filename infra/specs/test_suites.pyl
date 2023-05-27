@@ -13,15 +13,8 @@
       'android_sdk_junit_tests': {},
     },
     'android_perf_tests': {
-      'low_bandwidth_audio_perf_test': {
-        'mixins': ['perf-low-bandwidth-audio-perf-test'],
-        'args': [
-          '.',
-          '--remove',
-          '--android',
-          '--adb-path',
-          '../../third_party/android_sdk/public/platform-tools/adb',
-        ]
+      'video_codec_perf_tests': {
+        'mixins': ['perf-video-codec-perf-tests'],
       },
       'webrtc_perf_tests': {
         'mixins': ['perf-webrtc-perf-tests'],
@@ -69,9 +62,8 @@
       }
     },
     'desktop_perf_tests': {
-      'low_bandwidth_audio_perf_test': {
-        'mixins': ['perf-low-bandwidth-audio-perf-test'],
-        'args': ['.', '--remove'],
+      'video_codec_perf_tests': {
+        'mixins': ['perf-video-codec-perf-tests'],
       },
       'webrtc_perf_tests': {
         'mixins': ['perf-webrtc-perf-tests'],
@@ -86,9 +78,6 @@
       'common_audio_unittests': {},
       'common_video_unittests': {},
       'dcsctp_unittests': {},
-      'low_bandwidth_audio_test': {
-        'args': ['--quick']
-      },
       'modules_tests': {
         'mixins': ['shards-2'],
       },
@@ -130,9 +119,6 @@
       'common_audio_unittests': {},
       'common_video_unittests': {},
       'dcsctp_unittests': {},
-      'low_bandwidth_audio_test': {
-        'args': ['--quick']
-      },
       'rtc_media_unittests': {},
       # TODO(bugs.webrtc.org/14705): Enable when NonGlobalFieldTrialsInstanceDoesNotModifyGlobalString is fixed.
       # TODO(bugs.webrtc.org/14700):  Enable when NetworkTest tests are fixed.
@@ -242,6 +228,11 @@
         'mixins': ['baremetal-try-pool'],
       }
     },
+    'video_codec_perf_tests_tryserver': {
+      'video_codec_perf_tests': {
+        'mixins': ['quick-perf-tests', 'resultdb-gtest-json-format'],
+      }
+    },
     'webrtc_perf_tests': {
       'webrtc_perf_tests': {
         'mixins': ['perf-webrtc-perf-tests'],
@@ -275,6 +266,7 @@
       'desktop_tests',
       'linux_desktop_specific_tests',
       'video_capture_tests_tryserver',
+      'video_codec_perf_tests_tryserver',
       'webrtc_perf_tests_tryserver',
     ],
     'linux_desktop_tests_with_video_capture': [

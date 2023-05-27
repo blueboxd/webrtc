@@ -5,17 +5,12 @@
     "gtest_tests": [
       {
         "args": [
-          ".",
-          "--remove",
-          "--android",
-          "--adb-path",
-          "../../third_party/android_sdk/public/platform-tools/adb",
           "--isolated-script-test-perf-output=${ISOLATED_OUTDIR}/perftest-output.pb"
         ],
         "merge": {
           "args": [
             "--test-suite",
-            "low_bandwidth_audio_perf_test"
+            "video_codec_perf_tests"
           ],
           "script": "//tools_webrtc/perf/process_perf_results.py"
         },
@@ -40,8 +35,8 @@
           "io_timeout": 10800,
           "service_account": "chromium-tester@chops-service-accounts.iam.gserviceaccount.com"
         },
-        "test": "low_bandwidth_audio_perf_test",
-        "test_id_prefix": "ninja://audio:low_bandwidth_audio_perf_test/"
+        "test": "video_codec_perf_tests",
+        "test_id_prefix": "ninja://modules/video_coding:video_codec_perf_tests/"
       },
       {
         "args": [
@@ -85,17 +80,12 @@
     "gtest_tests": [
       {
         "args": [
-          ".",
-          "--remove",
-          "--android",
-          "--adb-path",
-          "../../third_party/android_sdk/public/platform-tools/adb",
           "--isolated-script-test-perf-output=${ISOLATED_OUTDIR}/perftest-output.pb"
         ],
         "merge": {
           "args": [
             "--test-suite",
-            "low_bandwidth_audio_perf_test"
+            "video_codec_perf_tests"
           ],
           "script": "//tools_webrtc/perf/process_perf_results.py"
         },
@@ -120,8 +110,8 @@
           "io_timeout": 10800,
           "service_account": "chromium-tester@chops-service-accounts.iam.gserviceaccount.com"
         },
-        "test": "low_bandwidth_audio_perf_test",
-        "test_id_prefix": "ninja://audio:low_bandwidth_audio_perf_test/"
+        "test": "video_codec_perf_tests",
+        "test_id_prefix": "ninja://modules/video_coding:video_codec_perf_tests/"
       },
       {
         "args": [
@@ -165,17 +155,12 @@
     "gtest_tests": [
       {
         "args": [
-          ".",
-          "--remove",
-          "--android",
-          "--adb-path",
-          "../../third_party/android_sdk/public/platform-tools/adb",
           "--isolated-script-test-perf-output=${ISOLATED_OUTDIR}/perftest-output.pb"
         ],
         "merge": {
           "args": [
             "--test-suite",
-            "low_bandwidth_audio_perf_test"
+            "video_codec_perf_tests"
           ],
           "script": "//tools_webrtc/perf/process_perf_results.py"
         },
@@ -200,8 +185,8 @@
           "io_timeout": 10800,
           "service_account": "chromium-tester@chops-service-accounts.iam.gserviceaccount.com"
         },
-        "test": "low_bandwidth_audio_perf_test",
-        "test_id_prefix": "ninja://audio:low_bandwidth_audio_perf_test/"
+        "test": "video_codec_perf_tests",
+        "test_id_prefix": "ninja://modules/video_coding:video_codec_perf_tests/"
       },
       {
         "args": [
@@ -245,17 +230,12 @@
     "gtest_tests": [
       {
         "args": [
-          ".",
-          "--remove",
-          "--android",
-          "--adb-path",
-          "../../third_party/android_sdk/public/platform-tools/adb",
           "--isolated-script-test-perf-output=${ISOLATED_OUTDIR}/perftest-output.pb"
         ],
         "merge": {
           "args": [
             "--test-suite",
-            "low_bandwidth_audio_perf_test"
+            "video_codec_perf_tests"
           ],
           "script": "//tools_webrtc/perf/process_perf_results.py"
         },
@@ -280,8 +260,8 @@
           "io_timeout": 10800,
           "service_account": "chromium-tester@chops-service-accounts.iam.gserviceaccount.com"
         },
-        "test": "low_bandwidth_audio_perf_test",
-        "test_id_prefix": "ninja://audio:low_bandwidth_audio_perf_test/"
+        "test": "video_codec_perf_tests",
+        "test_id_prefix": "ninja://modules/video_coding:video_codec_perf_tests/"
       },
       {
         "args": [
@@ -368,19 +348,17 @@
     "isolated_scripts": [
       {
         "args": [
-          ".",
-          "--remove",
           "--gtest_output=json:${ISOLATED_OUTDIR}/gtest_output.json"
         ],
-        "isolate_name": "low_bandwidth_audio_perf_test",
+        "isolate_name": "video_codec_perf_tests",
         "merge": {
           "args": [
             "--test-suite",
-            "low_bandwidth_audio_perf_test"
+            "video_codec_perf_tests"
           ],
           "script": "//tools_webrtc/perf/process_perf_results.py"
         },
-        "name": "low_bandwidth_audio_perf_test",
+        "name": "video_codec_perf_tests",
         "resultdb": {
           "result_file": "${ISOLATED_OUTDIR}/gtest_output.json",
           "result_format": "gtest_json"
@@ -399,7 +377,7 @@
           "idempotent": false,
           "io_timeout": 10800
         },
-        "test_id_prefix": "ninja://audio:low_bandwidth_audio_perf_test/"
+        "test_id_prefix": "ninja://modules/video_coding:video_codec_perf_tests/"
       },
       {
         "args": [
@@ -443,19 +421,17 @@
     "isolated_scripts": [
       {
         "args": [
-          ".",
-          "--remove",
           "--gtest_output=json:${ISOLATED_OUTDIR}/gtest_output.json"
         ],
-        "isolate_name": "low_bandwidth_audio_perf_test",
+        "isolate_name": "video_codec_perf_tests",
         "merge": {
           "args": [
             "--test-suite",
-            "low_bandwidth_audio_perf_test"
+            "video_codec_perf_tests"
           ],
           "script": "//tools_webrtc/perf/process_perf_results.py"
         },
-        "name": "low_bandwidth_audio_perf_test",
+        "name": "video_codec_perf_tests",
         "resultdb": {
           "result_file": "${ISOLATED_OUTDIR}/gtest_output.json",
           "result_format": "gtest_json"
@@ -475,7 +451,7 @@
           "idempotent": false,
           "io_timeout": 10800
         },
-        "test_id_prefix": "ninja://audio:low_bandwidth_audio_perf_test/"
+        "test_id_prefix": "ninja://modules/video_coding:video_codec_perf_tests/"
       },
       {
         "args": [
@@ -559,19 +535,17 @@
     "isolated_scripts": [
       {
         "args": [
-          ".",
-          "--remove",
           "--gtest_output=json:${ISOLATED_OUTDIR}/gtest_output.json"
         ],
-        "isolate_name": "low_bandwidth_audio_perf_test",
+        "isolate_name": "video_codec_perf_tests",
         "merge": {
           "args": [
             "--test-suite",
-            "low_bandwidth_audio_perf_test"
+            "video_codec_perf_tests"
           ],
           "script": "//tools_webrtc/perf/process_perf_results.py"
         },
-        "name": "low_bandwidth_audio_perf_test",
+        "name": "video_codec_perf_tests",
         "resultdb": {
           "result_file": "${ISOLATED_OUTDIR}/gtest_output.json",
           "result_format": "gtest_json"
@@ -590,7 +564,7 @@
           "idempotent": false,
           "io_timeout": 10800
         },
-        "test_id_prefix": "ninja://audio:low_bandwidth_audio_perf_test/"
+        "test_id_prefix": "ninja://modules/video_coding:video_codec_perf_tests/"
       },
       {
         "args": [

@@ -57,9 +57,10 @@ struct RTCDtlsTransportState {
   static const char* const kFailed;
 };
 
-// `RTCMediaStreamTrackStats::kind` is not an enum in the spec but the only
-// valid values are "audio" and "video".
-// https://w3c.github.io/webrtc-stats/#dom-rtcmediastreamtrackstats-kind
+// `RTCRtpStreamStats::kind` is not an enum in the spec but the only valid
+// values are "audio" and "video" as it comes from `MediaStreamTrack::kind`.
+// https://w3c.github.io/webrtc-stats/#dom-rtcrtpstreamstats-kind
+// https://w3c.github.io/mediacapture-main/#dom-mediadeviceinfo-kind
 struct RTCMediaStreamTrackKind {
   static const char* const kAudio;
   static const char* const kVideo;
@@ -250,8 +251,10 @@ class RTC_EXPORT RTCIceCandidateStats : public RTCStats {
   // Enum type RTCIceTcpCandidateType.
   RTCStatsMember<std::string> tcp_type;
 
-  RTCNonStandardStatsMember<bool> vpn;
-  RTCNonStandardStatsMember<std::string> network_adapter_type;
+  // The following metrics are NOT exposed to JavaScript. We should consider
+  // standardizing or removing them.
+  RTCStatsMember<bool> vpn;
+  RTCStatsMember<std::string> network_adapter_type;
 
  protected:
   RTCIceCandidateStats(std::string id, Timestamp timestamp, bool is_remote);
@@ -279,67 +282,6 @@ class RTC_EXPORT RTCRemoteIceCandidateStats final
   const char* type() const override;
 };
 
-// TODO(https://crbug.com/webrtc/14419): Delete this class, it's deprecated.
-class RTC_EXPORT DEPRECATED_RTCMediaStreamStats final : public RTCStats {
- public:
-  WEBRTC_RTCSTATS_DECL();
-
-  DEPRECATED_RTCMediaStreamStats(std::string id, Timestamp timestamp);
-  DEPRECATED_RTCMediaStreamStats(const DEPRECATED_RTCMediaStreamStats& other);
-  ~DEPRECATED_RTCMediaStreamStats() override;
-
-  RTCStatsMember<std::string> stream_identifier;
-  RTCStatsMember<std::vector<std::string>> track_ids;
-};
-using RTCMediaStreamStats [[deprecated("bugs.webrtc.org/14419")]] =
-    DEPRECATED_RTCMediaStreamStats;
-
-// TODO(https://crbug.com/webrtc/14175): Delete this class, it's deprecated.
-class RTC_EXPORT DEPRECATED_RTCMediaStreamTrackStats final : public RTCStats {
- public:
-  WEBRTC_RTCSTATS_DECL();
-
-  DEPRECATED_RTCMediaStreamTrackStats(std::string id,
-                                      Timestamp timestamp,
-                                      const char* kind);
-  DEPRECATED_RTCMediaStreamTrackStats(
-      const DEPRECATED_RTCMediaStreamTrackStats& other);
-  ~DEPRECATED_RTCMediaStreamTrackStats() override;
-
-  RTCStatsMember<std::string> track_identifier;
-  RTCStatsMember<std::string> media_source_id;
-  RTCStatsMember<bool> remote_source;
-  RTCStatsMember<bool> ended;
-  // TODO(https://crbug.com/webrtc/14173): Remove this obsolete metric.
-  RTCStatsMember<bool> detached;
-  // Enum type RTCMediaStreamTrackKind.
-  RTCStatsMember<std::string> kind;
-  RTCStatsMember<double> jitter_buffer_delay;
-  RTCStatsMember<uint64_t> jitter_buffer_emitted_count;
-  // Video-only members
-  RTCStatsMember<uint32_t> frame_width;
-  RTCStatsMember<uint32_t> frame_height;
-  RTCStatsMember<uint32_t> frames_sent;
-  RTCStatsMember<uint32_t> huge_frames_sent;
-  RTCStatsMember<uint32_t> frames_received;
-  RTCStatsMember<uint32_t> frames_decoded;
-  RTCStatsMember<uint32_t> frames_dropped;
-  // Audio-only members
-  RTCStatsMember<double> audio_level;         // Receive-only
-  RTCStatsMember<double> total_audio_energy;  // Receive-only
-  RTCStatsMember<double> echo_return_loss;
-  RTCStatsMember<double> echo_return_loss_enhancement;
-  RTCStatsMember<uint64_t> total_samples_received;
-  RTCStatsMember<double> total_samples_duration;  // Receive-only
-  RTCStatsMember<uint64_t> concealed_samples;
-  RTCStatsMember<uint64_t> silent_concealed_samples;
-  RTCStatsMember<uint64_t> concealment_events;
-  RTCStatsMember<uint64_t> inserted_samples_for_deceleration;
-  RTCStatsMember<uint64_t> removed_samples_for_acceleration;
-};
-using RTCMediaStreamTrackStats [[deprecated("bugs.webrtc.org/14175")]] =
-    DEPRECATED_RTCMediaStreamTrackStats;
-
 // https://w3c.github.io/webrtc-stats/#pcstats-dict*
 class RTC_EXPORT RTCPeerConnectionStats final : public RTCStats {
  public:
@@ -363,13 +305,8 @@ class RTC_EXPORT RTCRtpStreamStats : public RTCStats {
 
   RTCStatsMember<uint32_t> ssrc;
   RTCStatsMember<std::string> kind;
-  // Obsolete: track_id
-  RTCStatsMember<std::string> track_id;
   RTCStatsMember<std::string> transport_id;
   RTCStatsMember<std::string> codec_id;
-
-  // Obsolete
-  RTCStatsMember<std::string> media_type;  // renamed to kind.
 
  protected:
   RTCRtpStreamStats(std::string id, Timestamp timestamp);
@@ -467,9 +404,8 @@ class RTC_EXPORT RTCInboundRtpStreamStats final
   // TODO(https://crbug.com/webrtc/14177): Expose even if A/V sync is off?
   RTCStatsMember<double> estimated_playout_timestamp;
   // Only defined for video.
-  RTCRestrictedStatsMember<std::string,
-                           StatExposureCriteria::kHardwareCapability>
-      decoder_implementation;
+  // In JavaScript, this is only exposed if HW exposure is allowed.
+  RTCStatsMember<std::string> decoder_implementation;
   // FIR and PLI counts are only defined for |kind == "video"|.
   RTCStatsMember<uint32_t> fir_count;
   RTCStatsMember<uint32_t> pli_count;
@@ -482,17 +418,17 @@ class RTC_EXPORT RTCInboundRtpStreamStats final
   // TimingFrameInfo::ToString().
   // TODO(https://crbug.com/webrtc/14586): Unship or standardize this metric.
   RTCStatsMember<std::string> goog_timing_frame_info;
-  RTCRestrictedStatsMember<bool, StatExposureCriteria::kHardwareCapability>
-      power_efficient_decoder;
-  // Non-standard audio metrics.
-  RTCNonStandardStatsMember<uint64_t> jitter_buffer_flushes;
-  RTCNonStandardStatsMember<uint64_t> delayed_packet_outage_samples;
-  RTCNonStandardStatsMember<double> relative_packet_arrival_delay;
-  RTCNonStandardStatsMember<uint32_t> interruption_count;
-  RTCNonStandardStatsMember<double> total_interruption_duration;
+  // In JavaScript, this is only exposed if HW exposure is allowed.
+  RTCStatsMember<bool> power_efficient_decoder;
 
-  // The former googMinPlayoutDelayMs (in seconds).
-  RTCNonStandardStatsMember<double> min_playout_delay;
+  // The following metrics are NOT exposed to JavaScript. We should consider
+  // standardizing or removing them.
+  RTCStatsMember<uint64_t> jitter_buffer_flushes;
+  RTCStatsMember<uint64_t> delayed_packet_outage_samples;
+  RTCStatsMember<double> relative_packet_arrival_delay;
+  RTCStatsMember<uint32_t> interruption_count;
+  RTCStatsMember<double> total_interruption_duration;
+  RTCStatsMember<double> min_playout_delay;
 };
 
 // https://w3c.github.io/webrtc-stats/#outboundrtpstats-dict*
@@ -530,19 +466,18 @@ class RTC_EXPORT RTCOutboundRtpStreamStats final
   RTCStatsMember<uint32_t> quality_limitation_resolution_changes;
   // https://w3c.github.io/webrtc-provisional-stats/#dom-rtcoutboundrtpstreamstats-contenttype
   RTCStatsMember<std::string> content_type;
+  // In JavaScript, this is only exposed if HW exposure is allowed.
   // Only implemented for video.
   // TODO(https://crbug.com/webrtc/14178): Implement for audio as well.
-  RTCRestrictedStatsMember<std::string,
-                           StatExposureCriteria::kHardwareCapability>
-      encoder_implementation;
+  RTCStatsMember<std::string> encoder_implementation;
   // FIR and PLI counts are only defined for |kind == "video"|.
   RTCStatsMember<uint32_t> fir_count;
   RTCStatsMember<uint32_t> pli_count;
   RTCStatsMember<uint32_t> nack_count;
   RTCStatsMember<uint64_t> qp_sum;
   RTCStatsMember<bool> active;
-  RTCRestrictedStatsMember<bool, StatExposureCriteria::kHardwareCapability>
-      power_efficient_encoder;
+  // In JavaScript, this is only exposed if HW exposure is allowed.
+  RTCStatsMember<bool> power_efficient_encoder;
   RTCStatsMember<std::string> scalability_mode;
 };
 

@@ -208,8 +208,9 @@ void RtpSenderEgress::SendPacket(std::unique_ptr<RtpPacketToSend> packet,
   // In case of VideoTimingExtension, since it's present not in every packet,
   // data after rtp header may be corrupted if these packets are protected by
   // the FEC.
-  TimeDelta diff = now - packet->capture_time();
-  if (packet->HasExtension<TransmissionOffset>()) {
+  if (packet->HasExtension<TransmissionOffset>() &&
+      packet->capture_time() > Timestamp::Zero()) {
+    TimeDelta diff = now - packet->capture_time();
     packet->SetExtension<TransmissionOffset>(kTimestampTicksPerMs * diff.ms());
   }
   if (packet->HasExtension<AbsoluteSendTime>()) {
@@ -297,7 +298,7 @@ void RtpSenderEgress::CompleteSendPacket(const Packet& compound_packet,
     RtpPacketMediaType packet_type = *packet->packet_type();
     RtpPacketCounter counter(*packet);
     size_t size = packet->size();
-    // TODO(bugs.webrtc.org/137439): clean up task posting when the combined
+    // TODO(crbug.com/1373439): clean up task posting when the combined
     // network/worker project launches.
     if (TaskQueueBase::Current() != worker_queue_) {
       worker_queue_->PostTask(SafeTask(
@@ -580,9 +581,7 @@ void RtpSenderEgress::UpdateRtpStats(Timestamp now,
     StreamDataCounters* counters =
         packet_ssrc == rtx_ssrc_ ? &rtx_rtp_stats_ : &rtp_stats_;
 
-    if (counters->first_packet_time_ms == -1) {
-      counters->first_packet_time_ms = now.ms();
-    }
+    counters->MaybeSetFirstPacketTime(now);
 
     if (packet_type == RtpPacketMediaType::kForwardErrorCorrection) {
       counters->fec.Add(counter);

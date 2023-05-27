@@ -110,10 +110,10 @@ bool StreamStatisticianImpl::UpdateOutOfOrder(const RtpPacketReceived& packet,
 
 void StreamStatisticianImpl::UpdateCounters(const RtpPacketReceived& packet) {
   RTC_DCHECK_EQ(ssrc_, packet.Ssrc());
-  int64_t now_ms = clock_->TimeInMilliseconds();
+  Timestamp now = clock_->CurrentTime();
+  int64_t now_ms = now.ms();
 
   incoming_bitrate_.Update(packet.size(), now_ms);
-  receive_counters_.last_packet_received_timestamp_ms = now_ms;
   receive_counters_.transmitted.AddPacket(packet);
   --cumulative_loss_;
 
@@ -125,7 +125,7 @@ void StreamStatisticianImpl::UpdateCounters(const RtpPacketReceived& packet) {
     received_seq_first_ = sequence_number;
     last_report_seq_max_ = sequence_number - 1;
     received_seq_max_ = sequence_number - 1;
-    receive_counters_.first_packet_time_ms = now_ms;
+    receive_counters_.first_packet_time = now;
   } else if (UpdateOutOfOrder(packet, sequence_number, now_ms)) {
     return;
   }
@@ -221,10 +221,9 @@ RtpReceiveStats StreamStatisticianImpl::GetStats() const {
     stats.interarrival_jitter =
         webrtc::TimeDelta::Seconds(stats.jitter) / last_payload_type_frequency_;
   }
-  if (receive_counters_.last_packet_received_timestamp_ms.has_value()) {
+  if (last_receive_time_ms_ > 0) {
     stats.last_packet_received_timestamp_ms =
-        *receive_counters_.last_packet_received_timestamp_ms +
-        delta_internal_unix_epoch_ms_;
+        last_receive_time_ms_ + delta_internal_unix_epoch_ms_;
   }
   stats.packet_counter = receive_counters_.transmitted;
   return stats;

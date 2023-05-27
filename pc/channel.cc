@@ -245,7 +245,6 @@ bool BaseChannel::SetRtpTransport(webrtc::RtpTransportInternal* rtp_transport) {
     }
 
     RTC_DCHECK(!media_send_channel()->HasNetworkInterface());
-    RTC_DCHECK(!media_receive_channel()->HasNetworkInterface());
     media_send_channel()->SetInterface(this);
     media_receive_channel()->SetInterface(this);
 
@@ -379,7 +378,6 @@ void BaseChannel::OnNetworkRouteChanged(
   // work correctly. Intentionally leave it broken to simplify the code and
   // encourage the users to stop using non-muxing RTCP.
   media_send_channel()->OnNetworkRouteChanged(transport_name(), new_route);
-  media_receive_channel()->OnNetworkRouteChanged(transport_name(), new_route);
 }
 
 void BaseChannel::SetFirstPacketReceivedCallback(
@@ -712,18 +710,6 @@ bool BaseChannel::UpdateLocalStreams_w(const std::vector<StreamParams>& streams,
     if (media_send_channel()->AddSendStream(new_stream)) {
       RTC_LOG(LS_INFO) << "Add send stream ssrc: " << new_stream.ssrcs[0]
                        << " into " << ToString();
-      // Must also tell the corresponding receive stream to listen for
-      // RRs coming in on the new stream's SSRC
-      if (media_send_channel_impl_) {
-        if (all_streams.size() == 1) {
-          if (!media_receive_channel()->SetLocalSsrc(new_stream)) {
-            error_desc = StringFormat(
-                "Failed to set local ssrc: %u into m-section with mid='%s'",
-                new_stream.first_ssrc(), mid().c_str());
-            ret = false;
-          }
-        }
-      }
     } else {
       error_desc = StringFormat(
           "Failed to add send stream ssrc: %u into m-section with mid='%s'",
@@ -911,16 +897,16 @@ VoiceChannel::~VoiceChannel() {
 void VoiceChannel::UpdateMediaSendRecvState_w() {
   // Render incoming data if we're the active call, and we have the local
   // content. We receive data on the default channel and multiplexed streams.
-  bool ready_to_receive = enabled() && webrtc::RtpTransceiverDirectionHasRecv(
-                                           local_content_direction());
-  media_receive_channel()->SetPlayout(ready_to_receive);
+  bool receive = enabled() && webrtc::RtpTransceiverDirectionHasRecv(
+                                  local_content_direction());
+  media_receive_channel()->SetPlayout(receive);
 
   // Send outgoing data if we're the active call, we have the remote content,
   // and we have had some form of connectivity.
   bool send = IsReadyToSendMedia_w();
   media_send_channel()->SetSend(send);
 
-  RTC_LOG(LS_INFO) << "Changing voice state, recv=" << ready_to_receive
+  RTC_LOG(LS_INFO) << "Changing voice state, recv=" << receive
                    << " send=" << send << " for " << ToString();
 }
 
@@ -1077,10 +1063,14 @@ VideoChannel::~VideoChannel() {
 void VideoChannel::UpdateMediaSendRecvState_w() {
   // Send outgoing data if we're the active call, we have the remote content,
   // and we have had some form of connectivity.
+  bool receive = enabled() && webrtc::RtpTransceiverDirectionHasRecv(
+                                  local_content_direction());
+  media_receive_channel()->SetReceive(receive);
+
   bool send = IsReadyToSendMedia_w();
   media_send_channel()->SetSend(send);
-  RTC_LOG(LS_INFO) << "Changing video state, send=" << send << " for "
-                   << ToString();
+  RTC_LOG(LS_INFO) << "Changing video state, recv=" << receive
+                   << " send=" << send << " for " << ToString();
 }
 
 bool VideoChannel::SetLocalContent_w(const MediaContentDescription* content,
