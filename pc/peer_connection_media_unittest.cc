@@ -613,7 +613,7 @@ TEST_P(PeerConnectionMediaTest, RawPacketizationSetInOfferAndAnswer) {
   auto* offer_description =
       cricket::GetFirstVideoContentDescription(offer->description());
   for (const auto& codec : offer_description->codecs()) {
-    if (codec.GetCodecType() == cricket::VideoCodec::CODEC_VIDEO) {
+    if (codec.IsMediaCodec()) {
       EXPECT_EQ(codec.packetization, cricket::kPacketizationParamRaw);
     }
   }
@@ -624,7 +624,7 @@ TEST_P(PeerConnectionMediaTest, RawPacketizationSetInOfferAndAnswer) {
   auto* answer_description =
       cricket::GetFirstVideoContentDescription(answer->description());
   for (const auto& codec : answer_description->codecs()) {
-    if (codec.GetCodecType() == cricket::VideoCodec::CODEC_VIDEO) {
+    if (codec.IsMediaCodec()) {
       EXPECT_EQ(codec.packetization, cricket::kPacketizationParamRaw);
     }
   }
@@ -1037,13 +1037,17 @@ TEST_P(PeerConnectionMediaInvalidMediaTest, FailToSetLocalAnswer) {
   EXPECT_EQ("Failed to set local answer sdp: " + expected_error_, error);
 }
 
-void RemoveVideoContent(cricket::SessionDescription* desc) {
+void RemoveVideoContentAndUnbundle(cricket::SessionDescription* desc) {
+  // Removing BUNDLE is easier than removing the content in there.
+  desc->RemoveGroupByName("BUNDLE");
   auto content_name = cricket::GetFirstVideoContent(desc)->name;
   desc->RemoveContentByName(content_name);
   desc->RemoveTransportInfoByName(content_name);
 }
 
-void RenameVideoContent(cricket::SessionDescription* desc) {
+void RenameVideoContentAndUnbundle(cricket::SessionDescription* desc) {
+  // Removing BUNDLE is easier than renaming the content in there.
+  desc->RemoveGroupByName("BUNDLE");
   auto* video_content = cricket::GetFirstVideoContent(desc);
   auto* transport_info = desc->GetTransportInfoByName(video_content->name);
   video_content->name = "video_renamed";
@@ -1072,10 +1076,10 @@ INSTANTIATE_TEST_SUITE_P(
     PeerConnectionMediaInvalidMediaTest,
     Combine(Values(SdpSemantics::kPlanB_DEPRECATED, SdpSemantics::kUnifiedPlan),
             Values(std::make_tuple("remove video",
-                                   RemoveVideoContent,
+                                   RemoveVideoContentAndUnbundle,
                                    kMLinesOutOfOrder),
                    std::make_tuple("rename video",
-                                   RenameVideoContent,
+                                   RenameVideoContentAndUnbundle,
                                    kMLinesOutOfOrder),
                    std::make_tuple("reverse media sections",
                                    ReverseMediaContent,
@@ -1346,21 +1350,6 @@ TEST_P(PeerConnectionMediaTest, SetRemoteDescriptionFailsWithDuplicateMids) {
   EXPECT_FALSE(callee->SetRemoteDescription(std::move(offer), &error));
   EXPECT_EQ(error,
             "Failed to set remote offer sdp: Duplicate a=mid value 'same'.");
-}
-
-TEST_P(PeerConnectionMediaTest,
-       CombinedAudioVideoBweConfigPropagatedToMediaEngine) {
-  RTCConfiguration config;
-  config.combined_audio_video_bwe.emplace(true);
-  auto caller = CreatePeerConnectionWithAudioVideo(config);
-
-  ASSERT_TRUE(caller->SetLocalDescription(caller->CreateOffer()));
-
-  auto caller_voice = caller->media_engine()->GetVoiceSendChannel(0);
-  ASSERT_TRUE(caller_voice);
-  const cricket::AudioOptions& audio_options = caller_voice->options();
-  EXPECT_EQ(config.combined_audio_video_bwe,
-            audio_options.combined_audio_video_bwe);
 }
 
 // Test that if a RED codec refers to another codec in its fmtp line, but that

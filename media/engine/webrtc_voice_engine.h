@@ -18,6 +18,7 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/functional/any_invocable.h"
@@ -52,6 +53,7 @@
 #include "media/base/codec.h"
 #include "media/base/media_channel.h"
 #include "media/base/media_channel_impl.h"
+#include "media/base/media_channel_shim.h"
 #include "media/base/media_config.h"
 #include "media/base/media_engine.h"
 #include "media/base/rtp_utils.h"
@@ -89,7 +91,10 @@ class WebRtcVoiceEngine final : public VoiceEngineInterface {
       const rtc::scoped_refptr<webrtc::AudioDecoderFactory>& decoder_factory,
       rtc::scoped_refptr<webrtc::AudioMixer> audio_mixer,
       rtc::scoped_refptr<webrtc::AudioProcessing> audio_processing,
+      // TODO(bugs.webrtc.org/15111):
+      //   Remove the raw AudioFrameProcessor pointer in the follow-up.
       webrtc::AudioFrameProcessor* audio_frame_processor,
+      std::unique_ptr<webrtc::AudioFrameProcessor> owned_audio_frame_processor,
       const webrtc::FieldTrialsView& trials);
 
   WebRtcVoiceEngine() = delete;
@@ -156,7 +161,10 @@ class WebRtcVoiceEngine final : public VoiceEngineInterface {
   // The audio processing module.
   rtc::scoped_refptr<webrtc::AudioProcessing> apm_;
   // Asynchronous audio processing.
+  // TODO(bugs.webrtc.org/15111):
+  //   Remove the raw AudioFrameProcessor pointer in the follow-up.
   webrtc::AudioFrameProcessor* const audio_frame_processor_;
+  std::unique_ptr<webrtc::AudioFrameProcessor> owned_audio_frame_processor_;
   // The primary instance of WebRtc VoiceEngine.
   rtc::scoped_refptr<webrtc::AudioState> audio_state_;
   std::vector<AudioCodec> send_codecs_;
@@ -298,9 +306,14 @@ class WebRtcVoiceMediaChannel final : public VoiceMediaChannel,
     }
     return send_codec_spec_->enable_non_sender_rtt;
   }
+  bool SendCodecHasNack() const override { return SenderNackEnabled(); }
 
   void SetReceiveNackEnabled(bool enabled) override;
   void SetReceiveNonSenderRttEnabled(bool enabled) override;
+  void SetSendCodecChangedCallback(
+      absl::AnyInvocable<void()> callback) override {
+    send_codec_changed_callback_ = std::move(callback);
+  }
 
  private:
   bool SetOptions(const AudioOptions& options);
@@ -398,6 +411,9 @@ class WebRtcVoiceMediaChannel final : public VoiceMediaChannel,
   void FillSendCodecStats(VoiceMediaSendInfo* voice_media_info);
   void FillReceiveCodecStats(VoiceMediaReceiveInfo* voice_media_info);
 
+  // Callback invoked whenever the send codec changes.
+  // TODO(bugs.webrtc.org/13931): Remove again when coupling isn't needed.
+  absl::AnyInvocable<void()> send_codec_changed_callback_;
   // Callback invoked whenever the list of SSRCs changes.
   absl::AnyInvocable<void(const std::set<uint32_t>&)>
       ssrc_list_changed_callback_;

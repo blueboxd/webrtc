@@ -313,7 +313,10 @@ WebRtcVoiceEngine::WebRtcVoiceEngine(
     const rtc::scoped_refptr<webrtc::AudioDecoderFactory>& decoder_factory,
     rtc::scoped_refptr<webrtc::AudioMixer> audio_mixer,
     rtc::scoped_refptr<webrtc::AudioProcessing> audio_processing,
+    // TODO(bugs.webrtc.org/15111):
+    //   Remove the raw AudioFrameProcessor pointer in the follow-up.
     webrtc::AudioFrameProcessor* audio_frame_processor,
+    std::unique_ptr<webrtc::AudioFrameProcessor> owned_audio_frame_processor,
     const webrtc::FieldTrialsView& trials)
     : task_queue_factory_(task_queue_factory),
       adm_(adm),
@@ -322,6 +325,7 @@ WebRtcVoiceEngine::WebRtcVoiceEngine(
       audio_mixer_(audio_mixer),
       apm_(audio_processing),
       audio_frame_processor_(audio_frame_processor),
+      owned_audio_frame_processor_(std::move(owned_audio_frame_processor)),
       minimized_remsampling_on_mobile_trial_enabled_(
           IsEnabled(trials, "WebRTC-Audio-MinimizeResamplingOnMobile")) {
   RTC_LOG(LS_INFO) << "WebRtcVoiceEngine::WebRtcVoiceEngine";
@@ -387,10 +391,15 @@ void WebRtcVoiceEngine::Init() {
     }
     config.audio_processing = apm_;
     config.audio_device_module = adm_;
-    if (audio_frame_processor_)
+    if (audio_frame_processor_) {
       config.async_audio_processing_factory =
           rtc::make_ref_counted<webrtc::AsyncAudioProcessing::Factory>(
               *audio_frame_processor_, *task_queue_factory_);
+    } else if (owned_audio_frame_processor_) {
+      config.async_audio_processing_factory =
+          rtc::make_ref_counted<webrtc::AsyncAudioProcessing::Factory>(
+              std::move(owned_audio_frame_processor_), *task_queue_factory_);
+    }
     audio_state_ = webrtc::AudioState::Create(config);
   }
 
@@ -432,8 +441,21 @@ VoiceMediaChannel* WebRtcVoiceEngine::CreateMediaChannel(
     const webrtc::CryptoOptions& crypto_options,
     webrtc::AudioCodecPairId codec_pair_id) {
   RTC_DCHECK_RUN_ON(call->worker_thread());
-  return new WebRtcVoiceMediaChannel(role, this, config, options,
-                                     crypto_options, call, codec_pair_id);
+  std::unique_ptr<VoiceMediaSendChannelInterface> send_channel;
+  std::unique_ptr<VoiceMediaReceiveChannelInterface> receive_channel;
+  if (role == MediaChannel::Role::kSend || role == MediaChannel::Role::kBoth) {
+    send_channel = std::make_unique<WebRtcVoiceMediaChannel>(
+        MediaChannel::Role::kSend, this, config, options, crypto_options, call,
+        codec_pair_id);
+  }
+  if (role == MediaChannel::Role::kReceive ||
+      role == MediaChannel::Role::kBoth) {
+    receive_channel = std::make_unique<WebRtcVoiceMediaChannel>(
+        MediaChannel::Role::kReceive, this, config, options, crypto_options,
+        call, codec_pair_id);
+  }
+  return new VoiceMediaShimChannel(std::move(send_channel),
+                                   std::move(receive_channel));
 }
 
 void WebRtcVoiceEngine::ApplyOptions(const AudioOptions& options_in) {
@@ -1752,15 +1774,17 @@ bool WebRtcVoiceMediaChannel::SetSendCodecs(
   }
   call_->GetTransportControllerSend()->SetSdpBitrateParameters(bitrate_config);
 
+  send_codecs_ = codecs;
   // In legacy kBoth mode, the MediaChannel sets the NACK status.
   // In other modes, this is done externally.
 
   if (role() == MediaChannel::Role::kBoth) {
     SetReceiveNackEnabled(send_codec_spec_->nack_enabled);
     SetReceiveNonSenderRttEnabled(send_codec_spec_->enable_non_sender_rtt);
+  } else if (send_codec_changed_callback_) {
+    send_codec_changed_callback_();
   }
 
-  send_codecs_ = codecs;
   return true;
 }
 
@@ -2472,8 +2496,7 @@ bool WebRtcVoiceMediaChannel::GetReceiveStats(VoiceMediaReceiveInfo* info,
     rinfo.decoding_plc_cng = stats.decoding_plc_cng;
     rinfo.decoding_muted_output = stats.decoding_muted_output;
     rinfo.capture_start_ntp_time_ms = stats.capture_start_ntp_time_ms;
-    rinfo.last_packet_received_timestamp_ms =
-        stats.last_packet_received_timestamp_ms;
+    rinfo.last_packet_received = stats.last_packet_received;
     rinfo.estimated_playout_ntp_timestamp_ms =
         stats.estimated_playout_ntp_timestamp_ms;
     rinfo.jitter_buffer_flushes = stats.jitter_buffer_flushes;

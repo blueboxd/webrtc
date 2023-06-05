@@ -275,8 +275,9 @@ def BuildDepsentryDict(deps_dict):
         result[path] = CipdDepsEntry(path, dep['packages'])
       else:
         if '@' not in dep['url']:
-          continue
-        url, revision = dep['url'].split('@')
+          url, revision = dep['url'], 'HEAD'
+        else:
+          url, revision = dep['url'].split('@')
         result[path] = DepsEntry(path, url, revision)
 
   def AddVersionEntry(vars_subdict):
@@ -289,7 +290,7 @@ def BuildDepsentryDict(deps_dict):
       result[key] = VersionEntry(value)
 
   AddDepsEntries(deps_dict['deps'])
-  for deps_os in ['win', 'mac', 'unix', 'android', 'ios', 'unix']:
+  for deps_os in ['win', 'mac', 'linux', 'android', 'ios', 'unix']:
     AddDepsEntries(deps_dict.get('deps_os', {}).get(deps_os, {}))
   AddVersionEntry(deps_dict.get('vars', {}))
   return result
@@ -515,7 +516,7 @@ def GenerateCommitMessage(
         commit_msg.append('* %s: %s..%s' %
                           (c.path, c.current_version, c.new_version))
       elif isinstance(c, ChangedVersionEntry):
-        commit_msg.append('* %s_vesion: %s..%s' %
+        commit_msg.append('* %s_version: %s..%s' %
                           (c.path, c.current_version, c.new_version))
       else:
         commit_msg.append('* %s: %s/+log/%s..%s' %

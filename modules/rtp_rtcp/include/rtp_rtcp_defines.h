@@ -13,7 +13,6 @@
 
 #include <stddef.h>
 
-#include <list>
 #include <memory>
 #include <vector>
 
@@ -124,20 +123,6 @@ enum RtxMode {
 };
 
 const size_t kRtxHeaderSize = 2;
-
-struct RTCPReportBlock {
-  // Fields as described by RFC 3550 6.4.2.
-  uint32_t sender_ssrc = 0;  // SSRC of sender of this report.
-  uint32_t source_ssrc = 0;  // SSRC of the RTP packet sender.
-  uint8_t fraction_lost = 0;
-  int32_t packets_lost = 0;  // 24 bits valid.
-  uint32_t extended_highest_sequence_number = 0;
-  uint32_t jitter = 0;
-  uint32_t last_sender_report_timestamp = 0;
-  uint32_t delay_since_last_sender_report = 0;
-};
-
-typedef std::list<RTCPReportBlock> ReportBlockList;
 
 struct RtpState {
   uint16_t sequence_number = 0;
@@ -402,9 +387,12 @@ struct RtpReceiveStats {
   // Interarrival jitter in time.
   webrtc::TimeDelta interarrival_jitter = webrtc::TimeDelta::Zero();
 
-  // Timestamp and counters exposed in RTCInboundRtpStreamStats, see
+  // Time of the last packet received in unix epoch,
+  // i.e. Timestamp::Zero() represents 1st Jan 1970 00:00
+  absl::optional<Timestamp> last_packet_received;
+
+  // Counters exposed in RTCInboundRtpStreamStats, see
   // https://w3c.github.io/webrtc-stats/#inboundrtpstats-dict*
-  absl::optional<int64_t> last_packet_received_timestamp_ms;
   RtpPacketCounter packet_counter;
 };
 

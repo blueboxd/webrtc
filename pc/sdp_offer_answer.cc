@@ -501,7 +501,7 @@ RTCError FindDuplicateHeaderExtensionIds(
     return RTCError(
         RTCErrorType::INVALID_PARAMETER,
         "A BUNDLE group contains a codec collision for "
-        "header extension id='" +
+        "header extension id=" +
             rtc::ToString(extension.id) +
             ". The id must be the same across all bundled media descriptions");
   }
@@ -533,6 +533,30 @@ RTCError ValidateBundledRtpHeaderExtensions(
           return error;
         }
       }
+    }
+  }
+  return RTCError::OK();
+}
+
+RTCError ValidateRtpHeaderExtensionsForSpecSimulcast(
+    const cricket::SessionDescription& description) {
+  for (const ContentInfo& content : description.contents()) {
+    if (content.type != MediaProtocolType::kRtp) {
+      continue;
+    }
+    const auto media_description = content.media_description();
+    if (!media_description->HasSimulcast()) {
+      continue;
+    }
+    auto extensions = media_description->rtp_header_extensions();
+    auto it = absl::c_find_if(extensions, [](const RtpExtension& ext) {
+      return ext.uri == RtpExtension::kRidUri;
+    });
+    if (it == extensions.end()) {
+      return RTCError(RTCErrorType::INVALID_PARAMETER,
+                      "The media section with MID='" + content.mid() +
+                          "' negotiates simulcast but does not negotiate "
+                          "the RID RTP header extension.");
     }
   }
   return RTCError::OK();
@@ -1326,8 +1350,6 @@ void SdpOfferAnswerHandler::Initialize(
   // RTCConfiguration value (not available on Web).
   video_options_.screencast_min_bitrate_kbps =
       configuration.screencast_min_bitrate.value_or(100);
-  audio_options_.combined_audio_video_bwe =
-      configuration.combined_audio_video_bwe;
 
   audio_options_.audio_jitter_buffer_max_packets =
       configuration.audio_jitter_buffer_max_packets;
@@ -3532,9 +3554,13 @@ RTCError SdpOfferAnswerHandler::ValidateSessionDescription(
 
   // Validate that there are no collisions of bundled header extensions ids.
   error = ValidateBundledRtpHeaderExtensions(*sdesc->description());
-  // TODO(bugs.webrtc.org/14782): actually reject.
   RTC_HISTOGRAM_BOOLEAN("WebRTC.PeerConnection.ValidBundledExtensionIds",
                         error.ok());
+  // TODO(bugs.webrtc.org/14782): remove killswitch after rollout.
+  if (!error.ok() && !pc_->trials().IsDisabled(
+                         "WebRTC-PreventBundleHeaderExtensionIdCollision")) {
+    return error;
+  }
 
   if (!pc_->ValidateBundleSettings(sdesc->description(),
                                    bundle_groups_by_mid)) {
@@ -3599,6 +3625,12 @@ RTCError SdpOfferAnswerHandler::ValidateSessionDescription(
             "Media section has more than one track specified with a=ssrc lines "
             "which is not supported with Unified Plan.");
       }
+    }
+    // Validate spec-simulcast which only works if the remote end negotiated the
+    // mid and rid header extension.
+    error = ValidateRtpHeaderExtensionsForSpecSimulcast(*sdesc->description());
+    if (!error.ok()) {
+      return error;
     }
   }
 

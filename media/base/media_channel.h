@@ -33,6 +33,7 @@
 #include "api/transport/data_channel_transport_interface.h"
 #include "api/transport/rtp/rtp_source.h"
 #include "api/units/time_delta.h"
+#include "api/units/timestamp.h"
 #include "api/video/video_content_type.h"
 #include "api/video/video_sink_interface.h"
 #include "api/video/video_source_interface.h"
@@ -247,9 +248,14 @@ class MediaSendChannelInterface {
       webrtc::VideoEncoderFactory::EncoderSelectorInterface* encoder_selector) {
   }
   virtual webrtc::RtpParameters GetRtpSendParameters(uint32_t ssrc) const = 0;
+  virtual bool SendCodecHasNack() const = 0;
   // Called whenever the list of sending SSRCs changes.
   virtual void SetSsrcListChangedCallback(
       absl::AnyInvocable<void(const std::set<uint32_t>&)> callback) = 0;
+  // TODO(bugs.webrtc.org/13931): Remove when configuration is more sensible
+  virtual void SetSendCodecChangedCallback(
+      absl::AnyInvocable<void()> callback) = 0;
+
   // Get the underlying send/receive implementation channel for testing.
   // TODO(bugs.webrtc.org/13931): Remove method and the fakes that depend on it.
   virtual MediaChannel* ImplForTesting() = 0;
@@ -385,8 +391,8 @@ struct MediaSenderInfo {
   std::vector<SsrcReceiverInfo> remote_stats;
   // A snapshot of the most recent Report Block with additional data of interest
   // to statistics. Used to implement RTCRemoteInboundRtpStreamStats. Within
-  // this list, the ReportBlockData::RTCPReportBlock::source_ssrc(), which is
-  // the SSRC of the corresponding outbound RTP stream, is unique.
+  // this list, the `ReportBlockData::source_ssrc()`, which is the SSRC of the
+  // corresponding outbound RTP stream, is unique.
   std::vector<webrtc::ReportBlockData> report_block_datas;
   absl::optional<bool> active;
   // https://w3c.github.io/webrtc-stats/#dom-rtcoutboundrtpstreamstats-totalpacketsenddelay
@@ -453,7 +459,7 @@ struct MediaReceiverInfo {
   // The timestamp at which the last packet was received, i.e. the time of the
   // local clock when it was received - not the RTP timestamp of that packet.
   // https://w3c.github.io/webrtc-stats/#dom-rtcinboundrtpstreamstats-lastpacketreceivedtimestamp
-  absl::optional<int64_t> last_packet_received_timestamp_ms;
+  absl::optional<webrtc::Timestamp> last_packet_received;
   // https://w3c.github.io/webrtc-stats/#dom-rtcinboundrtpstreamstats-estimatedplayouttimestamp
   absl::optional<int64_t> estimated_playout_ntp_timestamp_ms;
   std::string codec_name;
@@ -952,7 +958,6 @@ class VideoMediaSendChannelInterface : public MediaSendChannelInterface {
   // Information queries to support SetReceiverFeedbackParameters
   virtual webrtc::RtcpMode SendCodecRtcpMode() const = 0;
   virtual bool SendCodecHasLntf() const = 0;
-  virtual bool SendCodecHasNack() const = 0;
   virtual absl::optional<int> SendCodecRtxTime() const = 0;
 };
 
