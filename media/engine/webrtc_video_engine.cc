@@ -220,7 +220,7 @@ std::vector<VideoCodec> GetPayloadTypesAndDefaultCodecs(
 
   std::vector<VideoCodec> output_codecs;
   for (const webrtc::SdpVideoFormat& format : supported_formats) {
-    VideoCodec codec(format);
+    VideoCodec codec = cricket::CreateVideoCodec(format);
     bool isFecCodec = absl::EqualsIgnoreCase(codec.name, kUlpfecCodecName) ||
                       absl::EqualsIgnoreCase(codec.name, kFlexfecCodecName);
 
@@ -597,8 +597,7 @@ std::vector<VideoCodecSettings> MapCodecs(
       }
 
       case Codec::ResiliencyType::kNone: {
-        video_codecs.emplace_back();
-        video_codecs.back().codec = in_codec;
+        video_codecs.emplace_back(in_codec);
         break;
       }
     }
@@ -825,6 +824,27 @@ WebRtcVideoEngine::~WebRtcVideoEngine() {
   RTC_DLOG(LS_INFO) << "WebRtcVideoEngine::~WebRtcVideoEngine";
 }
 
+std::unique_ptr<VideoMediaSendChannelInterface>
+WebRtcVideoEngine::CreateSendChannel(
+    webrtc::Call* call,
+    const MediaConfig& config,
+    const VideoOptions& options,
+    const webrtc::CryptoOptions& crypto_options,
+    webrtc::VideoBitrateAllocatorFactory* video_bitrate_allocator_factory) {
+  return std::make_unique<WebRtcVideoSendChannel>(
+      call, config, options, crypto_options, encoder_factory_.get(),
+      decoder_factory_.get(), video_bitrate_allocator_factory);
+}
+std::unique_ptr<VideoMediaReceiveChannelInterface>
+WebRtcVideoEngine::CreateReceiveChannel(
+    webrtc::Call* call,
+    const MediaConfig& config,
+    const VideoOptions& options,
+    const webrtc::CryptoOptions& crypto_options) {
+  return std::make_unique<WebRtcVideoReceiveChannel>(
+      call, config, options, crypto_options, decoder_factory_.get());
+}
+
 VideoMediaChannel* WebRtcVideoEngine::CreateMediaChannel(
     MediaChannel::Role role,
     webrtc::Call* call,
@@ -836,14 +856,13 @@ VideoMediaChannel* WebRtcVideoEngine::CreateMediaChannel(
   std::unique_ptr<VideoMediaSendChannelInterface> send_channel;
   std::unique_ptr<VideoMediaReceiveChannelInterface> receive_channel;
   if (role == MediaChannel::Role::kSend || role == MediaChannel::Role::kBoth) {
-    send_channel = std::make_unique<WebRtcVideoSendChannel>(
-        call, config, options, crypto_options, encoder_factory_.get(),
-        decoder_factory_.get(), video_bitrate_allocator_factory);
+    send_channel = CreateSendChannel(call, config, options, crypto_options,
+                                     video_bitrate_allocator_factory);
   }
   if (role == MediaChannel::Role::kReceive ||
       role == MediaChannel::Role::kBoth) {
-    receive_channel = std::make_unique<WebRtcVideoReceiveChannel>(
-        call, config, options, crypto_options, decoder_factory_.get());
+    receive_channel =
+        CreateReceiveChannel(call, config, options, crypto_options);
   }
   return new VideoMediaShimChannel(std::move(send_channel),
                                    std::move(receive_channel));
@@ -1493,14 +1512,13 @@ void WebRtcVideoReceiveChannel::ChooseReceiverReportSsrc(
   SetReceiverReportSsrc(*choices.begin());
 }
 
-bool WebRtcVideoSendChannel::GetSendCodec(VideoCodec* codec) {
+absl::optional<VideoCodec> WebRtcVideoSendChannel::GetSendCodec() {
   RTC_DCHECK_RUN_ON(&thread_checker_);
   if (!send_codec()) {
     RTC_LOG(LS_VERBOSE) << "GetSendCodec: No send codec set.";
-    return false;
+    return absl::nullopt;
   }
-  *codec = send_codec()->codec;
-  return true;
+  return send_codec()->codec;
 }
 
 void WebRtcVideoReceiveChannel::SetReceive(bool receive) {
@@ -3672,8 +3690,8 @@ void WebRtcVideoReceiveChannel::WebRtcVideoReceiveStream::UpdateRtxSsrc(
   stream_->UpdateRtxSsrc(ssrc);
 }
 
-VideoCodecSettings::VideoCodecSettings()
-    : flexfec_payload_type(-1), rtx_payload_type(-1) {}
+VideoCodecSettings::VideoCodecSettings(const VideoCodec& codec)
+    : codec(codec), flexfec_payload_type(-1), rtx_payload_type(-1) {}
 
 bool VideoCodecSettings::operator==(const VideoCodecSettings& other) const {
   return codec == other.codec && ulpfec == other.ulpfec &&

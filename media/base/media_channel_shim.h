@@ -83,14 +83,8 @@ class VoiceMediaShimChannel : public VoiceMediaChannel {
     }
   }
 
-  // Not really valid for this mode
-  MediaChannel* ImplForTesting() override {
-    RTC_CHECK_NOTREACHED();
-    return nullptr;
-  }
-
   // Implementation of MediaBaseChannelInterface
-  cricket::MediaType media_type() const override { return MEDIA_TYPE_VIDEO; }
+  cricket::MediaType media_type() const override { return MEDIA_TYPE_AUDIO; }
 
   // Implementation of MediaSendChannelInterface
   void OnPacketSent(const rtc::SentPacket& sent_packet) override {
@@ -331,12 +325,6 @@ class VideoMediaShimChannel : public VideoMediaChannel {
     }
   }
 
-  // Not really valid for this mode
-  MediaChannel* ImplForTesting() override {
-    RTC_CHECK_NOTREACHED();
-    return nullptr;
-  }
-
   // Implementation of MediaBaseChannelInterface
   cricket::MediaType media_type() const override { return MEDIA_TYPE_VIDEO; }
 
@@ -397,8 +385,8 @@ class VideoMediaShimChannel : public VideoMediaChannel {
   bool SetSendParameters(const VideoSendParameters& params) override {
     return send_impl()->SetSendParameters(params);
   }
-  bool GetSendCodec(VideoCodec* send_codec) override {
-    return send_impl()->GetSendCodec(send_codec);
+  absl::optional<VideoCodec> GetSendCodec() override {
+    return send_impl()->GetSendCodec();
   }
   bool SetSend(bool send) override { return send_impl()->SetSend(send); }
   bool SetVideoSend(

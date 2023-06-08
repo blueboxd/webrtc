@@ -255,10 +255,6 @@ class MediaSendChannelInterface {
   // TODO(bugs.webrtc.org/13931): Remove when configuration is more sensible
   virtual void SetSendCodecChangedCallback(
       absl::AnyInvocable<void()> callback) = 0;
-
-  // Get the underlying send/receive implementation channel for testing.
-  // TODO(bugs.webrtc.org/13931): Remove method and the fakes that depend on it.
-  virtual MediaChannel* ImplForTesting() = 0;
 };
 
 class MediaReceiveChannelInterface : public Delayable {
@@ -313,9 +309,6 @@ class MediaReceiveChannelInterface : public Delayable {
       uint32_t ssrc,
       rtc::scoped_refptr<webrtc::FrameTransformerInterface>
           frame_transformer) = 0;
-  // Get the underlying send/receive implementation channel for testing.
-  // TODO(bugs.webrtc.org/13931): Remove method and the fakes that depend on it.
-  virtual MediaChannel* ImplForTesting() = 0;
 };
 
 // The stats information is structured as follows:
@@ -939,7 +932,7 @@ class VideoMediaSendChannelInterface : public MediaSendChannelInterface {
  public:
   virtual bool SetSendParameters(const VideoSendParameters& params) = 0;
   // Gets the currently set codecs/payload types to be used for outgoing media.
-  virtual bool GetSendCodec(VideoCodec* send_codec) = 0;
+  virtual absl::optional<VideoCodec> GetSendCodec() = 0;
   // Starts or stops transmission (and potentially capture) of local video.
   virtual bool SetSend(bool send) = 0;
   // Configure stream for sending and register a source.

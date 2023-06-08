@@ -104,6 +104,19 @@ class WebRtcVideoEngine : public VideoEngineInterface {
 
   ~WebRtcVideoEngine() override;
 
+  std::unique_ptr<VideoMediaSendChannelInterface> CreateSendChannel(
+      webrtc::Call* call,
+      const MediaConfig& config,
+      const VideoOptions& options,
+      const webrtc::CryptoOptions& crypto_options,
+      webrtc::VideoBitrateAllocatorFactory* video_bitrate_allocator_factory)
+      override;
+  std::unique_ptr<VideoMediaReceiveChannelInterface> CreateReceiveChannel(
+      webrtc::Call* call,
+      const MediaConfig& config,
+      const VideoOptions& options,
+      const webrtc::CryptoOptions& crypto_options) override;
+
   VideoMediaChannel* CreateMediaChannel(
       MediaChannel::Role role,
       webrtc::Call* call,
@@ -133,7 +146,7 @@ class WebRtcVideoEngine : public VideoEngineInterface {
 };
 
 struct VideoCodecSettings {
-  VideoCodecSettings();
+  explicit VideoCodecSettings(const VideoCodec& codec);
 
   // Checks if all members of |*this| are equal to the corresponding members
   // of `other`.
@@ -194,7 +207,7 @@ class WebRtcVideoSendChannel : public MediaChannelUtil,
       const webrtc::RtpParameters& parameters,
       webrtc::SetParametersCallback callback) override;
   webrtc::RtpParameters GetRtpSendParameters(uint32_t ssrc) const override;
-  bool GetSendCodec(VideoCodec* send_codec) override;
+  absl::optional<VideoCodec> GetSendCodec() override;
   bool SetSend(bool send) override;
   bool SetVideoSend(
       uint32_t ssrc,
@@ -464,11 +477,6 @@ class WebRtcVideoSendChannel : public MediaChannelUtil,
   absl::optional<VideoCodecSettings>& send_codec() { return send_codec_; }
   const absl::optional<VideoCodecSettings>& send_codec() const {
     return send_codec_;
-  }
-  // Disabled function from interface
-  MediaChannel* ImplForTesting() override {
-    RTC_CHECK_NOTREACHED();
-    return nullptr;
   }
   webrtc::TaskQueueBase* const worker_thread_;
   webrtc::ScopedTaskSafety task_safety_;
@@ -820,12 +828,6 @@ class WebRtcVideoReceiveChannel : public MediaChannelUtil,
   StreamParams unsignaled_stream_params() {
     RTC_DCHECK_RUN_ON(&thread_checker_);
     return unsignaled_stream_params_;
-  }
-
-  // Disabled function from API
-  MediaChannel* ImplForTesting() override {
-    RTC_CHECK_NOTREACHED();
-    return nullptr;
   }
   // Variables.
   webrtc::TaskQueueBase* const worker_thread_;
