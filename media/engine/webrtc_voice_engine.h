@@ -195,8 +195,7 @@ class WebRtcVoiceEngine final : public VoiceEngineInterface {
 };
 
 class WebRtcVoiceSendChannel final : public MediaChannelUtil,
-                                     public VoiceMediaSendChannelInterface,
-                                     public webrtc::Transport {
+                                     public VoiceMediaSendChannelInterface {
  public:
   WebRtcVoiceSendChannel(WebRtcVoiceEngine* engine,
                          const MediaConfig& config,
@@ -217,6 +216,8 @@ class WebRtcVoiceSendChannel final : public MediaChannelUtil,
     return nullptr;
   }
   VoiceMediaSendChannelInterface* AsVoiceSendChannel() override { return this; }
+
+  absl::optional<Codec> GetSendCodec() const override;
 
   // Functions imported from MediaChannelUtil
   void SetInterface(MediaChannelNetworkInterface* iface) override {
@@ -276,13 +277,6 @@ class WebRtcVoiceSendChannel final : public MediaChannelUtil,
       uint32_t ssrc,
       rtc::scoped_refptr<webrtc::FrameTransformerInterface> frame_transformer)
       override;
-
-  // implements Transport interface
-  bool SendRtp(const uint8_t* data,
-               size_t len,
-               const webrtc::PacketOptions& options) override;
-
-  bool SendRtcp(const uint8_t* data, size_t len) override;
 
   bool SenderNackEnabled() const override {
     if (!send_codec_spec_) {
@@ -361,8 +355,7 @@ class WebRtcVoiceSendChannel final : public MediaChannelUtil,
 
 class WebRtcVoiceReceiveChannel final
     : public MediaChannelUtil,
-      public VoiceMediaReceiveChannelInterface,
-      public webrtc::Transport {
+      public VoiceMediaReceiveChannelInterface {
  public:
   WebRtcVoiceReceiveChannel(WebRtcVoiceEngine* engine,
                             const MediaConfig& config,
@@ -443,13 +436,6 @@ class WebRtcVoiceReceiveChannel final
       uint32_t ssrc,
       rtc::scoped_refptr<webrtc::FrameTransformerInterface> frame_transformer)
       override;
-
-  // implements Transport interface
-  bool SendRtp(const uint8_t* data,
-               size_t len,
-               const webrtc::PacketOptions& options) override;
-
-  bool SendRtcp(const uint8_t* data, size_t len) override;
 
   void SetReceiveNackEnabled(bool enabled) override;
   void SetReceiveNonSenderRttEnabled(bool enabled) override;
