@@ -4275,8 +4275,7 @@ void SdpOfferAnswerHandler::GetOptionsForUnifiedPlanOffer(
   }
   // Lastly, add a m-section if we have requested local data channels and an
   // m section does not already exist.
-  if (!pc_->GetDataMid() && data_channel_controller()->HasUsedDataChannels() &&
-      data_channel_controller()->HasDataChannels()) {
+  if (!pc_->GetDataMid() && data_channel_controller()->HasDataChannels()) {
     // Attempt to recycle a stopped m-line.
     // TODO(crbug.com/1442604): GetDataMid() should return the mid if one was
     // ever created but rejected.
@@ -4794,13 +4793,11 @@ RTCError SdpOfferAnswerHandler::PushdownMediaDescription(
     // - crbug.com/1187289
     for (const auto& entry : channels) {
       std::string error;
-      bool success =
-          context_->worker_thread()->BlockingCall([&]() {
-            return (source == cricket::CS_LOCAL)
-                       ? entry.first->SetLocalContent(entry.second, type, error)
-                       : entry.first->SetRemoteContent(entry.second, type,
-                                                       error);
-          });
+      bool success = context_->worker_thread()->BlockingCall([&]() {
+        return (source == cricket::CS_LOCAL)
+                   ? entry.first->SetLocalContent(entry.second, type, error)
+                   : entry.first->SetRemoteContent(entry.second, type, error);
+      });
       if (!success) {
         return RTCError(RTCErrorType::INVALID_PARAMETER, error);
       }
