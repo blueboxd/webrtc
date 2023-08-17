@@ -167,20 +167,20 @@ VideoMediaReceiveInfo::~VideoMediaReceiveInfo() = default;
 VoiceMediaReceiveInfo::VoiceMediaReceiveInfo() = default;
 VoiceMediaReceiveInfo::~VoiceMediaReceiveInfo() = default;
 
-AudioSendParameters::AudioSendParameters() = default;
-AudioSendParameters::~AudioSendParameters() = default;
+AudioSenderParameter::AudioSenderParameter() = default;
+AudioSenderParameter::~AudioSenderParameter() = default;
 
-std::map<std::string, std::string> AudioSendParameters::ToStringMap() const {
-  auto params = RtpSendParameters<AudioCodec>::ToStringMap();
+std::map<std::string, std::string> AudioSenderParameter::ToStringMap() const {
+  auto params = SenderParameters::ToStringMap();
   params["options"] = options.ToString();
   return params;
 }
 
-VideoSendParameters::VideoSendParameters() = default;
-VideoSendParameters::~VideoSendParameters() = default;
+VideoSenderParameters::VideoSenderParameters() = default;
+VideoSenderParameters::~VideoSenderParameters() = default;
 
-std::map<std::string, std::string> VideoSendParameters::ToStringMap() const {
-  auto params = RtpSendParameters<VideoCodec>::ToStringMap();
+std::map<std::string, std::string> VideoSenderParameters::ToStringMap() const {
+  auto params = SenderParameters::ToStringMap();
   params["conference_mode"] = (conference_mode ? "yes" : "no");
   return params;
 }
@@ -199,10 +199,10 @@ MediaChannelUtil::TransportForMediaChannels::~TransportForMediaChannels() {
   RTC_DCHECK(!network_interface_);
 }
 
-bool MediaChannelUtil::TransportForMediaChannels::SendRtcp(const uint8_t* data,
-                                                           size_t len) {
+bool MediaChannelUtil::TransportForMediaChannels::SendRtcp(
+    rtc::ArrayView<const uint8_t> packet) {
   auto send = [this, packet = rtc::CopyOnWriteBuffer(
-                         data, len, kMaxRtpPacketLen)]() mutable {
+                         packet, kMaxRtpPacketLen)]() mutable {
     rtc::PacketOptions rtc_options;
     if (DscpEnabled()) {
       rtc_options.dscp = PreferredDscp();
@@ -219,8 +219,7 @@ bool MediaChannelUtil::TransportForMediaChannels::SendRtcp(const uint8_t* data,
 }
 
 bool MediaChannelUtil::TransportForMediaChannels::SendRtp(
-    const uint8_t* data,
-    size_t len,
+    rtc::ArrayView<const uint8_t> packet,
     const webrtc::PacketOptions& options) {
   auto send =
       [this, packet_id = options.packet_id,
@@ -228,7 +227,7 @@ bool MediaChannelUtil::TransportForMediaChannels::SendRtp(
        included_in_allocation = options.included_in_allocation,
        batchable = options.batchable,
        last_packet_in_batch = options.last_packet_in_batch,
-       packet = rtc::CopyOnWriteBuffer(data, len, kMaxRtpPacketLen)]() mutable {
+       packet = rtc::CopyOnWriteBuffer(packet, kMaxRtpPacketLen)]() mutable {
         rtc::PacketOptions rtc_options;
         rtc_options.packet_id = packet_id;
         if (DscpEnabled()) {

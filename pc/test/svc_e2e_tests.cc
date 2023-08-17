@@ -344,7 +344,7 @@ TEST_P(SvcTest, ScalabilityModeSupported) {
         alice->SetVideoCodecs({video_codec_config});
       },
       [](PeerConfigurer* bob) {}, std::move(analyzer));
-  fixture->Run(RunParams(TimeDelta::Seconds(5)));
+  fixture->Run(RunParams(TimeDelta::Seconds(10)));
   EXPECT_THAT(analyzer_ptr->encoder_layers_seen(),
               HasSpatialAndTemporalLayers(
                   SvcTestParameters().expected_spatial_layers,
@@ -471,8 +471,7 @@ INSTANTIATE_TEST_SUITE_P(
                 SvcTestParameters::Create(kAv1CodecName, "L2T2h"),
                 SvcTestParameters::Create(kAv1CodecName, "L2T2_KEY"),
                 SvcTestParameters::Create(kAv1CodecName, "L2T2_KEY_SHIFT"),
-                // TODO(marpan): Re-enable after fixing the test.
-                // SvcTestParameters::Create(kAv1CodecName, "L2T3"),
+                SvcTestParameters::Create(kAv1CodecName, "L2T3"),
                 SvcTestParameters::Create(kAv1CodecName, "L2T3h"),
                 SvcTestParameters::Create(kAv1CodecName, "L2T3_KEY"),
                 // SvcTestParameters::Create(kAv1CodecName, "L2T3_KEY_SHIFT"),

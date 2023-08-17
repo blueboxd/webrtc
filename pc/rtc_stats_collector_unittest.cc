@@ -2368,6 +2368,10 @@ TEST_F(RTCStatsCollectorTest, CollectRTCInboundRtpStreamStats_Video) {
   video_media_info.receivers[0].retransmitted_bytes_received = 62;
   video_media_info.receivers[0].fec_packets_received = 32;
   video_media_info.receivers[0].fec_bytes_received = 54;
+  video_media_info.receivers[0].ssrc_groups.push_back(
+      {cricket::kFidSsrcGroupSemantics, {1, 4404}});
+  video_media_info.receivers[0].ssrc_groups.push_back(
+      {cricket::kFecFrSsrcGroupSemantics, {1, 5505}});
 
   // Note: these two values intentionally differ,
   // only the decoded one should show up.
@@ -2434,6 +2438,8 @@ TEST_F(RTCStatsCollectorTest, CollectRTCInboundRtpStreamStats_Video) {
   expected_video.retransmitted_bytes_received = 62;
   expected_video.fec_packets_received = 32;
   expected_video.fec_bytes_received = 54;
+  expected_video.rtx_ssrc = 4404;
+  expected_video.fec_ssrc = 5505;
 
   ASSERT_TRUE(report->Get(expected_video.id()));
   EXPECT_EQ(
@@ -2464,18 +2470,6 @@ TEST_F(RTCStatsCollectorTest, CollectRTCInboundRtpStreamStats_Video) {
       expected_video);
   EXPECT_TRUE(report->Get(*expected_video.transport_id));
   EXPECT_TRUE(report->Get(*expected_video.codec_id));
-
-  // Make sure content type is still reported as "screenshare" even when the
-  // VideoContentType enum is overloaded with additional information.
-  videocontenttypehelpers::SetSimulcastId(
-      &video_media_info.receivers[0].content_type, 2);
-  video_media_channels.first->SetStats(video_media_info);
-  video_media_channels.second->SetStats(video_media_info);
-
-  report = stats_->GetFreshStatsReport();
-  EXPECT_EQ(
-      report->Get(expected_video.id())->cast_to<RTCInboundRtpStreamStats>(),
-      expected_video);
 }
 
 TEST_F(RTCStatsCollectorTest, CollectRTCAudioPlayoutStats) {
@@ -2641,6 +2635,8 @@ TEST_F(RTCStatsCollectorTest, CollectRTCOutboundRtpStreamStats_Video) {
   video_media_info.senders[0].huge_frames_sent = 2;
   video_media_info.senders[0].active = false;
   video_media_info.senders[0].scalability_mode = ScalabilityMode::kL3T3_KEY;
+  video_media_info.senders[0].ssrc_groups.push_back(
+      {cricket::kFidSsrcGroupSemantics, {1, 4404}});
   video_media_info.aggregated_senders.push_back(video_media_info.senders[0]);
   RtpCodecParameters codec_parameters;
   codec_parameters.payload_type = 42;
@@ -2696,6 +2692,7 @@ TEST_F(RTCStatsCollectorTest, CollectRTCOutboundRtpStreamStats_Video) {
   expected_video.active = false;
   expected_video.power_efficient_encoder = false;
   expected_video.scalability_mode = "L3T3_KEY";
+  expected_video.rtx_ssrc = 4404;
   // `expected_video.content_type` should be undefined.
   // `expected_video.qp_sum` should be undefined.
   // `expected_video.encoder_implementation` should be undefined.
@@ -2726,18 +2723,6 @@ TEST_F(RTCStatsCollectorTest, CollectRTCOutboundRtpStreamStats_Video) {
       expected_video);
   EXPECT_TRUE(report->Get(*expected_video.transport_id));
   EXPECT_TRUE(report->Get(*expected_video.codec_id));
-
-  // Make sure content type is still reported as "screenshare" even when the
-  // VideoContentType enum is overloaded with additional information.
-  videocontenttypehelpers::SetSimulcastId(
-      &video_media_info.senders[0].content_type, 2);
-  video_media_channels.first->SetStats(video_media_info);
-  video_media_channels.second->SetStats(video_media_info);
-
-  report = stats_->GetFreshStatsReport();
-  EXPECT_EQ(
-      report->Get(expected_video.id())->cast_to<RTCOutboundRtpStreamStats>(),
-      expected_video);
 }
 
 TEST_F(RTCStatsCollectorTest, CollectRTCTransportStats) {
