@@ -14,7 +14,7 @@ import android.content.Context;
 
 public class ApplicationContextProvider {
   @CalledByNative
-  public static Context getApplicationContextForTest() {
+  public static Context getApplicationContext() {
     return ContextUtils.getApplicationContext();
   }
 }

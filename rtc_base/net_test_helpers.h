@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2015 The WebRTC project authors. All Rights Reserved.
+ *  Copyright 2023 The WebRTC Project Authors. All rights reserved.
  *
  *  Use of this source code is governed by a BSD-style license
  *  that can be found in the LICENSE file in the root of the source
@@ -8,10 +8,16 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-namespace webrtc {
-namespace audiodevicemodule {
+#ifndef RTC_BASE_NET_TEST_HELPERS_H_
+#define RTC_BASE_NET_TEST_HELPERS_H_
 
-void EnsureInitialized();
+#include "rtc_base/system/rtc_export.h"
 
-}  // namespace audiodevicemodule
-}  // namespace webrtc
+namespace rtc {
+
+RTC_EXPORT bool HasIPv4Enabled();
+RTC_EXPORT bool HasIPv6Enabled();
+
+}  // namespace rtc
+
+#endif  // RTC_BASE_NET_TEST_HELPERS_H_
