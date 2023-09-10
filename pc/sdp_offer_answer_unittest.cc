@@ -890,4 +890,107 @@ TEST_F(SdpOfferAnswerTest,
   EXPECT_FALSE(pc->SetLocalDescription(std::move(modified_offer)));
 }
 
+TEST_F(SdpOfferAnswerTest, AllowOnlyOneSsrcGroupPerSemanticAndPrimarySsrc) {
+  auto pc = CreatePeerConnection();
+
+  pc->AddAudioTrack("audio_track", {});
+  pc->AddVideoTrack("video_track", {});
+  auto offer = pc->CreateOffer();
+  auto& offer_contents = offer->description()->contents();
+  ASSERT_EQ(offer_contents.size(), 2u);
+  uint32_t audio_ssrc = offer_contents[0].media_description()->first_ssrc();
+  ASSERT_EQ(offer_contents[1].media_description()->streams().size(), 1u);
+  auto& video_stream = offer->description()
+                           ->contents()[1]
+                           .media_description()
+                           ->mutable_streams()[0];
+  ASSERT_EQ(video_stream.ssrcs.size(), 2u);
+  ASSERT_EQ(video_stream.ssrc_groups.size(), 1u);
+  video_stream.ssrcs.push_back(audio_ssrc);
+  video_stream.ssrc_groups.push_back(
+      {cricket::kFidSsrcGroupSemantics, {video_stream.ssrcs[0], audio_ssrc}});
+  std::string sdp;
+  offer->ToString(&sdp);
+
+  // Trim the last two lines which contain ssrc-specific attributes
+  // that we change/munge above. Guarded with expectation about what
+  // should be removed in case the SDP generation changes.
+  size_t end = sdp.rfind("\r\n");
+  end = sdp.rfind("\r\n", end - 2);
+  end = sdp.rfind("\r\n", end - 2);
+  EXPECT_EQ(sdp.substr(end + 2), "a=ssrc:" + rtc::ToString(audio_ssrc) +
+                                     " cname:" + video_stream.cname +
+                                     "\r\n"
+                                     "a=ssrc:" +
+                                     rtc::ToString(audio_ssrc) +
+                                     " msid:- video_track\r\n");
+
+  auto modified_offer =
+      CreateSessionDescription(SdpType::kOffer, sdp.substr(0, end + 2));
+  EXPECT_FALSE(pc->SetLocalDescription(std::move(modified_offer)));
+}
+
+TEST_F(SdpOfferAnswerTest, OfferWithRtxAndNoMsidIsNotRejected) {
+  auto pc = CreatePeerConnection();
+  std::string sdp =
+      "v=0\r\n"
+      "o=- 0 3 IN IP4 127.0.0.1\r\n"
+      "s=-\r\n"
+      "t=0 0\r\n"
+      "a=group:BUNDLE 0\r\n"
+      "a=fingerprint:sha-1 "
+      "4A:AD:B9:B1:3F:82:18:3B:54:02:12:DF:3E:5D:49:6B:19:E5:7C:AB\r\n"
+      "a=setup:actpass\r\n"
+      "a=ice-ufrag:ETEn\r\n"
+      "a=ice-pwd:OtSK0WpNtpUjkY4+86js7Z/l\r\n"
+      "m=video 9 UDP/TLS/RTP/SAVPF 96 97\r\n"
+      "c=IN IP4 0.0.0.0\r\n"
+      "a=rtcp-mux\r\n"
+      "a=sendonly\r\n"
+      "a=mid:0\r\n"
+      // "a=msid:stream obsoletetrack\r\n"
+      "a=rtpmap:96 VP8/90000\r\n"
+      "a=rtpmap:97 rtx/90000\r\n"
+      "a=fmtp:97 apt=96\r\n"
+      "a=ssrc-group:FID 1 2\r\n"
+      "a=ssrc:1 cname:test\r\n"
+      "a=ssrc:2 cname:test\r\n";
+  auto offer = CreateSessionDescription(SdpType::kOffer, sdp);
+  EXPECT_TRUE(pc->SetRemoteDescription(std::move(offer)));
+}
+
+TEST_F(SdpOfferAnswerTest, RejectsAnswerWithInvalidTransport) {
+  auto pc1 = CreatePeerConnection();
+  pc1->AddAudioTrack("audio_track", {});
+  auto pc2 = CreatePeerConnection();
+  pc2->AddAudioTrack("anotheraudio_track", {});
+
+  auto initial_offer = pc1->CreateOfferAndSetAsLocal();
+  ASSERT_EQ(initial_offer->description()->contents().size(), 1u);
+  auto mid = initial_offer->description()->contents()[0].mid();
+
+  EXPECT_TRUE(pc2->SetRemoteDescription(std::move(initial_offer)));
+  auto initial_answer = pc2->CreateAnswerAndSetAsLocal();
+
+  std::string sdp;
+  initial_answer->ToString(&sdp);
+  EXPECT_TRUE(pc1->SetRemoteDescription(std::move(initial_answer)));
+
+  auto transceivers = pc1->pc()->GetTransceivers();
+  ASSERT_EQ(transceivers.size(), 1u);
+  // This stops the only transport.
+  transceivers[0]->StopStandard();
+
+  auto subsequent_offer = pc1->CreateOfferAndSetAsLocal();
+  // But the remote answers with a non-rejected m-line which is not valid.
+  auto bad_answer = CreateSessionDescription(
+      SdpType::kAnswer,
+      absl::StrReplaceAll(sdp, {{"a=group:BUNDLE " + mid + "\r\n", ""}}));
+
+  RTCError error;
+  pc1->SetRemoteDescription(std::move(bad_answer), &error);
+  EXPECT_FALSE(error.ok());
+  EXPECT_EQ(error.type(), RTCErrorType::INVALID_PARAMETER);
+}
+
 }  // namespace webrtc

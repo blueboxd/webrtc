@@ -305,6 +305,23 @@ static bool ValidateStreamParams(const StreamParams& sp) {
     return false;
   }
 
+  // Validate that a primary SSRC can only have one ssrc-group per semantics.
+  std::map<uint32_t, std::set<std::string>> primary_ssrc_to_semantics;
+  for (const auto& group : sp.ssrc_groups) {
+    auto result = primary_ssrc_to_semantics.try_emplace(
+        group.ssrcs[0], std::set<std::string>({group.semantics}));
+    if (!result.second) {
+      // A duplicate SSRC was found, check for duplicate semantics.
+      auto semantics_it = result.first->second.insert(group.semantics);
+      if (!semantics_it.second) {
+        RTC_LOG(LS_ERROR) << "Duplicate ssrc-group '" << group.semantics
+                          << " for primary SSRC " << group.ssrcs[0] << " "
+                          << sp.ToString();
+        return false;
+      }
+    }
+  }
+
   std::vector<uint32_t> primary_ssrcs;
   sp.GetPrimarySsrcs(&primary_ssrcs);
   for (const auto& semantic :
@@ -945,6 +962,16 @@ WebRtcVideoSendChannel::WebRtcVideoSendStream::ConfigureVideoEncoderSettings(
     }
     return rtc::make_ref_counted<
         webrtc::VideoEncoderConfig::Vp9EncoderSpecificSettings>(vp9_settings);
+  }
+  if (absl::EqualsIgnoreCase(codec.name, kAv1CodecName)) {
+    webrtc::VideoCodecAV1 av1_settings = {.automatic_resize_on =
+                                              automatic_resize};
+    if (NumSpatialLayersFromEncoding(rtp_parameters_, /*idx=*/0) > 1 ||
+        rtp_parameters_.encodings.size() > 1) {
+      av1_settings.automatic_resize_on = false;
+    }
+    return rtc::make_ref_counted<
+        webrtc::VideoEncoderConfig::Av1EncoderSpecificSettings>(av1_settings);
   }
   return nullptr;
 }
