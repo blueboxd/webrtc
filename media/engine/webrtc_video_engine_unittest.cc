@@ -722,16 +722,17 @@ TEST_F(WebRtcVideoEngineTest, RtxCodecAddedForH264Codec) {
   // Now search for RTX codecs for them. Expect that they all have associated
   // RTX codecs.
   EXPECT_TRUE(HasRtxCodec(
-      codecs, FindMatchingCodec(
+      codecs, FindMatchingVideoCodec(
                   codecs, cricket::CreateVideoCodec(h264_constrained_baseline))
                   ->id));
   EXPECT_TRUE(HasRtxCodec(
-      codecs, FindMatchingCodec(
+      codecs, FindMatchingVideoCodec(
                   codecs, cricket::CreateVideoCodec(h264_constrained_high))
                   ->id));
   EXPECT_TRUE(HasRtxCodec(
       codecs,
-      FindMatchingCodec(codecs, cricket::CreateVideoCodec(h264_high))->id));
+      FindMatchingVideoCodec(codecs, cricket::CreateVideoCodec(h264_high))
+          ->id));
 }
 
 #if defined(RTC_ENABLE_VP9)
@@ -3697,16 +3698,6 @@ TEST_F(WebRtcVideoChannelTest, VerifyAv1SpecificSettings) {
   rtp_parameters.encodings[0].scalability_mode = "L2T3";
   EXPECT_TRUE(
       send_channel_->SetRtpSendParameters(last_ssrc_, rtp_parameters).ok());
-  frame_forwarder.IncomingCapturedFrame(frame_source_.GetFrame());
-
-  ASSERT_TRUE(stream->GetAv1Settings(&settings)) << "No AV1 config set.";
-  EXPECT_FALSE(settings.automatic_resize_on);
-
-  EXPECT_TRUE(send_channel_->SetVideoSend(last_ssrc_, nullptr, nullptr));
-  stream = SetUpSimulcast(true, /*with_rtx=*/false);
-  EXPECT_TRUE(
-      send_channel_->SetVideoSend(last_ssrc_, nullptr, &frame_forwarder));
-  send_channel_->SetSend(true);
   frame_forwarder.IncomingCapturedFrame(frame_source_.GetFrame());
 
   ASSERT_TRUE(stream->GetAv1Settings(&settings)) << "No AV1 config set.";

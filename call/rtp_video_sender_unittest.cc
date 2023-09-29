@@ -66,8 +66,7 @@ RtpSenderObservers CreateObservers(
     StreamDataCountersCallback* rtp_stats,
     BitrateStatisticsObserver* bitrate_observer,
     FrameCountObserver* frame_count_observer,
-    RtcpPacketTypeCounterObserver* rtcp_type_observer,
-    SendSideDelayObserver* send_delay_observer) {
+    RtcpPacketTypeCounterObserver* rtcp_type_observer) {
   RtpSenderObservers observers;
   observers.rtcp_rtt_stats = nullptr;
   observers.intra_frame_callback = intra_frame_callback;
@@ -77,7 +76,6 @@ RtpSenderObservers CreateObservers(
   observers.bitrate_observer = bitrate_observer;
   observers.frame_count_observer = frame_count_observer;
   observers.rtcp_type_observer = rtcp_type_observer;
-  observers.send_delay_observer = send_delay_observer;
   observers.send_packet_observer = nullptr;
   return observers;
 }
@@ -145,8 +143,7 @@ class RtpVideoSenderTestFixture {
         time_controller_.GetClock(), suspended_ssrcs, suspended_payload_states,
         config_.rtp, config_.rtcp_report_interval_ms, &transport_,
         CreateObservers(&encoder_feedback_, &stats_proxy_, &stats_proxy_,
-                        &stats_proxy_, frame_count_observer, &stats_proxy_,
-                        &stats_proxy_),
+                        &stats_proxy_, frame_count_observer, &stats_proxy_),
         &transport_controller_, &event_log_, &retransmission_rate_limiter_,
         std::make_unique<FecControllerDefault>(time_controller_.GetClock()),
         nullptr, CryptoOptions{}, frame_transformer,
@@ -221,7 +218,7 @@ BitrateAllocationUpdate CreateBitrateAllocationUpdate(int target_bitrate_bps) {
 TEST(RtpVideoSenderTest, SendOnOneModule) {
   constexpr uint8_t kPayload = 'a';
   EncodedImage encoded_image;
-  encoded_image.SetTimestamp(1);
+  encoded_image.SetRtpTimestamp(1);
   encoded_image.capture_time_ms_ = 2;
   encoded_image._frameType = VideoFrameType::kVideoFrameKey;
   encoded_image.SetEncodedData(EncodedImageBuffer::Create(&kPayload, 1));
@@ -246,7 +243,7 @@ TEST(RtpVideoSenderTest, SendOnOneModule) {
 TEST(RtpVideoSenderTest, SendSimulcastSetActive) {
   constexpr uint8_t kPayload = 'a';
   EncodedImage encoded_image_1;
-  encoded_image_1.SetTimestamp(1);
+  encoded_image_1.SetRtpTimestamp(1);
   encoded_image_1.capture_time_ms_ = 2;
   encoded_image_1._frameType = VideoFrameType::kVideoFrameKey;
   encoded_image_1.SetEncodedData(EncodedImageBuffer::Create(&kPayload, 1));
@@ -281,7 +278,7 @@ TEST(RtpVideoSenderTest, SendSimulcastSetActive) {
 TEST(RtpVideoSenderTest, SendSimulcastSetActiveModules) {
   constexpr uint8_t kPayload = 'a';
   EncodedImage encoded_image_1;
-  encoded_image_1.SetTimestamp(1);
+  encoded_image_1.SetRtpTimestamp(1);
   encoded_image_1.capture_time_ms_ = 2;
   encoded_image_1._frameType = VideoFrameType::kVideoFrameKey;
   encoded_image_1.SetEncodedData(EncodedImageBuffer::Create(&kPayload, 1));
@@ -317,7 +314,7 @@ TEST(RtpVideoSenderTest,
      DiscardsHigherSimulcastFramesAfterLayerDisabledInVideoLayersAllocation) {
   constexpr uint8_t kPayload = 'a';
   EncodedImage encoded_image_1;
-  encoded_image_1.SetTimestamp(1);
+  encoded_image_1.SetRtpTimestamp(1);
   encoded_image_1.capture_time_ms_ = 2;
   encoded_image_1._frameType = VideoFrameType::kVideoFrameKey;
   encoded_image_1.SetEncodedData(EncodedImageBuffer::Create(&kPayload, 1));
@@ -402,7 +399,7 @@ TEST(RtpVideoSenderTest, FrameCountCallbacks) {
 
   constexpr uint8_t kPayload = 'a';
   EncodedImage encoded_image;
-  encoded_image.SetTimestamp(1);
+  encoded_image.SetRtpTimestamp(1);
   encoded_image.capture_time_ms_ = 2;
   encoded_image._frameType = VideoFrameType::kVideoFrameKey;
   encoded_image.SetEncodedData(EncodedImageBuffer::Create(&kPayload, 1));
@@ -448,7 +445,7 @@ TEST(RtpVideoSenderTest, DoesNotRetrasmitAckedPackets) {
 
   constexpr uint8_t kPayload = 'a';
   EncodedImage encoded_image;
-  encoded_image.SetTimestamp(1);
+  encoded_image.SetRtpTimestamp(1);
   encoded_image.capture_time_ms_ = 2;
   encoded_image._frameType = VideoFrameType::kVideoFrameKey;
   encoded_image.SetEncodedData(EncodedImageBuffer::Create(&kPayload, 1));
@@ -469,7 +466,7 @@ TEST(RtpVideoSenderTest, DoesNotRetrasmitAckedPackets) {
       });
   EXPECT_EQ(EncodedImageCallback::Result::OK,
             test.router()->OnEncodedImage(encoded_image, nullptr).error);
-  encoded_image.SetTimestamp(2);
+  encoded_image.SetRtpTimestamp(2);
   encoded_image.capture_time_ms_ = 3;
   EXPECT_EQ(EncodedImageCallback::Result::OK,
             test.router()->OnEncodedImage(encoded_image, nullptr).error);
@@ -613,7 +610,7 @@ TEST(RtpVideoSenderTest, EarlyRetransmits) {
 
   const uint8_t kPayload[1] = {'a'};
   EncodedImage encoded_image;
-  encoded_image.SetTimestamp(1);
+  encoded_image.SetRtpTimestamp(1);
   encoded_image.capture_time_ms_ = 2;
   encoded_image._frameType = VideoFrameType::kVideoFrameKey;
   encoded_image.SetEncodedData(
@@ -720,7 +717,7 @@ TEST(RtpVideoSenderTest, SupportsDependencyDescriptor) {
 
   const uint8_t kPayload[1] = {'a'};
   EncodedImage encoded_image;
-  encoded_image.SetTimestamp(1);
+  encoded_image.SetRtpTimestamp(1);
   encoded_image.capture_time_ms_ = 2;
   encoded_image.SetEncodedData(
       EncodedImageBuffer::Create(kPayload, sizeof(kPayload)));
@@ -826,7 +823,7 @@ TEST(RtpVideoSenderTest, SupportsDependencyDescriptorForVp9) {
 
   const uint8_t kPayload[1] = {'a'};
   EncodedImage encoded_image;
-  encoded_image.SetTimestamp(1);
+  encoded_image.SetRtpTimestamp(1);
   encoded_image.capture_time_ms_ = 2;
   encoded_image._frameType = VideoFrameType::kVideoFrameKey;
   encoded_image.SetEncodedData(
@@ -882,7 +879,7 @@ TEST(RtpVideoSenderTest,
 
   const uint8_t kPayload[1] = {'a'};
   EncodedImage encoded_image;
-  encoded_image.SetTimestamp(1);
+  encoded_image.SetRtpTimestamp(1);
   encoded_image.capture_time_ms_ = 2;
   encoded_image._frameType = VideoFrameType::kVideoFrameKey;
   encoded_image._encodedWidth = 320;
@@ -904,7 +901,7 @@ TEST(RtpVideoSenderTest,
 
   // Send in 2nd picture.
   encoded_image._frameType = VideoFrameType::kVideoFrameDelta;
-  encoded_image.SetTimestamp(3000);
+  encoded_image.SetRtpTimestamp(3000);
   codec_specific.codecSpecific.VP9.inter_pic_predicted = true;
   codec_specific.codecSpecific.VP9.num_ref_pics = 1;
   codec_specific.codecSpecific.VP9.p_diff[0] = 1;
@@ -937,7 +934,7 @@ TEST(RtpVideoSenderTest, GenerateDependecyDescriptorForGenericCodecs) {
 
   const uint8_t kPayload[1] = {'a'};
   EncodedImage encoded_image;
-  encoded_image.SetTimestamp(1);
+  encoded_image.SetRtpTimestamp(1);
   encoded_image.capture_time_ms_ = 2;
   encoded_image._frameType = VideoFrameType::kVideoFrameKey;
   encoded_image._encodedWidth = 320;
@@ -955,7 +952,7 @@ TEST(RtpVideoSenderTest, GenerateDependecyDescriptorForGenericCodecs) {
 
   // Send in 2nd picture.
   encoded_image._frameType = VideoFrameType::kVideoFrameDelta;
-  encoded_image.SetTimestamp(3000);
+  encoded_image.SetRtpTimestamp(3000);
   EXPECT_EQ(test.router()->OnEncodedImage(encoded_image, &codec_specific).error,
             EncodedImageCallback::Result::OK);
 
@@ -983,7 +980,7 @@ TEST(RtpVideoSenderTest, SupportsStoppingUsingDependencyDescriptor) {
 
   const uint8_t kPayload[1] = {'a'};
   EncodedImage encoded_image;
-  encoded_image.SetTimestamp(1);
+  encoded_image.SetRtpTimestamp(1);
   encoded_image.capture_time_ms_ = 2;
   encoded_image.SetEncodedData(
       EncodedImageBuffer::Create(kPayload, sizeof(kPayload)));
@@ -1102,7 +1099,7 @@ TEST(RtpVideoSenderTest, ClearsPendingPacketsOnInactivation) {
   const size_t kImageSizeBytes = 10000;
   constexpr uint8_t kPayload[kImageSizeBytes] = {'a'};
   EncodedImage encoded_image;
-  encoded_image.SetTimestamp(1);
+  encoded_image.SetRtpTimestamp(1);
   encoded_image.capture_time_ms_ = 2;
   encoded_image._frameType = VideoFrameType::kVideoFrameKey;
   encoded_image.SetEncodedData(
@@ -1141,7 +1138,7 @@ TEST(RtpVideoSenderTest, ClearsPendingPacketsOnInactivation) {
   EXPECT_TRUE(sent_packets.empty());
 
   // Send a new frame.
-  encoded_image.SetTimestamp(3);
+  encoded_image.SetRtpTimestamp(3);
   encoded_image.capture_time_ms_ = 4;
   EXPECT_EQ(test.router()
                 ->OnEncodedImage(encoded_image, /*codec_specific=*/nullptr)
@@ -1164,7 +1161,7 @@ TEST(RtpVideoSenderTest, RetransmitsBaseLayerOnly) {
   test.router()->SetRetransmissionMode(kRetransmitBaseLayer);
   constexpr uint8_t kPayload = 'a';
   EncodedImage encoded_image;
-  encoded_image.SetTimestamp(1);
+  encoded_image.SetRtpTimestamp(1);
   encoded_image.capture_time_ms_ = 2;
   encoded_image._frameType = VideoFrameType::kVideoFrameKey;
   encoded_image.SetEncodedData(EncodedImageBuffer::Create(&kPayload, 1));
@@ -1190,7 +1187,7 @@ TEST(RtpVideoSenderTest, RetransmitsBaseLayerOnly) {
   EXPECT_EQ(EncodedImageCallback::Result::OK,
             test.router()->OnEncodedImage(
                 encoded_image, &key_codec_info).error);
-  encoded_image.SetTimestamp(2);
+  encoded_image.SetRtpTimestamp(2);
   encoded_image.capture_time_ms_ = 3;
   encoded_image._frameType = VideoFrameType::kVideoFrameDelta;
   CodecSpecificInfo delta_codec_info;

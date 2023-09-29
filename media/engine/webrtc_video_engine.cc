@@ -966,8 +966,7 @@ WebRtcVideoSendChannel::WebRtcVideoSendStream::ConfigureVideoEncoderSettings(
   if (absl::EqualsIgnoreCase(codec.name, kAv1CodecName)) {
     webrtc::VideoCodecAV1 av1_settings = {.automatic_resize_on =
                                               automatic_resize};
-    if (NumSpatialLayersFromEncoding(rtp_parameters_, /*idx=*/0) > 1 ||
-        rtp_parameters_.encodings.size() > 1) {
+    if (NumSpatialLayersFromEncoding(rtp_parameters_, /*idx=*/0) > 1) {
       av1_settings.automatic_resize_on = false;
     }
     return rtc::make_ref_counted<
@@ -2680,7 +2679,7 @@ bool WebRtcVideoReceiveChannel::GetChangedReceiverParameters(
                                         /*is_decoder_factory=*/true,
                                         /*include_rtx=*/true, call_->trials());
     for (const VideoCodecSettings& mapped_codec : mapped_codecs) {
-      if (!FindMatchingCodec(local_supported_codecs, mapped_codec.codec)) {
+      if (!FindMatchingVideoCodec(local_supported_codecs, mapped_codec.codec)) {
         RTC_LOG(LS_ERROR) << "GetChangedReceiverParameters called with "
                              "unsupported video codec: "
                           << mapped_codec.codec.ToString();
