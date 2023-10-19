@@ -28,8 +28,12 @@ namespace webrtc {
 // when network is loss limited, or equal to the delay based estimate.
 enum class LossBasedState {
   kIncreasing = 0,
-  kDecreasing = 1,
-  kDelayBasedEstimate = 2
+  // TODO(bugs.webrtc.org/12707): Remove one of the increasing states once we
+  // have decided if padding is usefull for ramping up when BWE is loss
+  // limited.
+  kIncreaseUsingPadding = 1,
+  kDecreasing = 2,
+  kDelayBasedEstimate = 3
 };
 
 class LossBasedBweV2 {
@@ -105,13 +109,14 @@ class LossBasedBweV2 {
     double bandwidth_backoff_lower_bound_factor = 0.0;
     double max_increase_factor = 0.0;
     TimeDelta delayed_increase_window = TimeDelta::Zero();
-    bool use_acked_bitrate_only_when_overusing = false;
     bool not_increase_if_inherent_loss_less_than_average_loss = false;
     double high_loss_rate_threshold = 1.0;
     DataRate bandwidth_cap_at_high_loss_rate = DataRate::MinusInfinity();
     double slope_of_bwe_high_loss_func = 1000.0;
     bool not_use_acked_rate_in_alr = false;
     bool use_in_start_phase = false;
+    int min_num_observations = 0;
+    double lower_bound_by_acked_rate_factor = 0.0;
   };
 
   struct Derivatives {
@@ -153,33 +158,37 @@ class LossBasedBweV2 {
   DataRate GetSendingRate(DataRate instantaneous_sending_rate) const;
   DataRate GetInstantUpperBound() const;
   void CalculateInstantUpperBound();
+  DataRate GetInstantLowerBound() const;
+  void CalculateInstantLowerBound();
 
   void CalculateTemporalWeights();
   void NewtonsMethodUpdate(ChannelParameters& channel_parameters) const;
 
   // Returns false if no observation was created.
   bool PushBackObservation(rtc::ArrayView<const PacketResult> packet_results);
-  bool IsEstimateIncreasingWhenLossLimited(
-      const ChannelParameters& best_candidate);
-  bool IsBandwidthLimitedDueToLoss() const;
+  void UpdateResult();
+  bool IsEstimateIncreasingWhenLossLimited(DataRate old_estimate,
+                                           DataRate new_estimate);
+  bool IsInLossLimitedState() const;
 
   absl::optional<DataRate> acknowledged_bitrate_;
   absl::optional<Config> config_;
-  ChannelParameters current_estimate_;
+  ChannelParameters current_best_estimate_;
   int num_observations_ = 0;
   std::vector<Observation> observations_;
   PartialObservation partial_observation_;
   Timestamp last_send_time_most_recent_observation_ = Timestamp::PlusInfinity();
   Timestamp last_time_estimate_reduced_ = Timestamp::MinusInfinity();
   absl::optional<DataRate> cached_instant_upper_bound_;
+  absl::optional<DataRate> cached_instant_lower_bound_;
   std::vector<double> instant_upper_bound_temporal_weights_;
   std::vector<double> temporal_weights_;
   Timestamp recovering_after_loss_timestamp_ = Timestamp::MinusInfinity();
   DataRate bandwidth_limit_in_current_window_ = DataRate::PlusInfinity();
   DataRate min_bitrate_ = DataRate::KilobitsPerSec(1);
   DataRate max_bitrate_ = DataRate::PlusInfinity();
-  LossBasedState current_state_ = LossBasedState::kDelayBasedEstimate;
   DataRate delay_based_estimate_ = DataRate::PlusInfinity();
+  LossBasedBweV2::Result loss_based_result_ = LossBasedBweV2::Result();
 };
 
 }  // namespace webrtc
