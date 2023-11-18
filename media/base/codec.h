@@ -20,7 +20,6 @@
 #include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
 #include "api/audio_codecs/audio_format.h"
-#include "api/field_trials_view.h"
 #include "api/rtp_parameters.h"
 #include "api/video_codecs/sdp_video_format.h"
 #include "media/base/media_constants.h"
@@ -28,7 +27,7 @@
 
 namespace cricket {
 
-typedef std::map<std::string, std::string> CodecParameterMap;
+using CodecParameterMap = std::map<std::string, std::string>;
 
 class FeedbackParam {
  public:
@@ -112,8 +111,11 @@ struct RTC_EXPORT Codec {
   // Indicates if this codec is compatible with the specified codec by
   // checking the assigned id and profile values for the relevant video codecs.
   // H264 levels are not compared.
-  bool Matches(const Codec& codec,
-               const webrtc::FieldTrialsView* field_trials = nullptr) const;
+  bool Matches(const Codec& codec) const;
+
+  // Like `Matches` but does not consider the packetization.
+  bool MatchesWithoutPacketization(const Codec& codec) const;
+
   bool MatchesRtpCodec(const webrtc::RtpCodec& capability) const;
 
   // Find the parameter for `name` and write the value to `out`.
@@ -186,6 +188,9 @@ struct RTC_EXPORT Codec {
 // TODO(webrtc:15214): Compatibility names, to be migrated away and removed.
 using VideoCodec = Codec;
 using AudioCodec = Codec;
+
+using VideoCodecs = std::vector<Codec>;
+using AudioCodecs = std::vector<Codec>;
 
 Codec CreateAudioCodec(int id,
                        const std::string& name,

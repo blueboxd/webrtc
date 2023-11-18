@@ -62,6 +62,9 @@ class LossBasedBweV2 {
   // Returns true if loss based BWE is ready to be used in the start phase.
   bool ReadyToUseInStartPhase() const;
 
+  // Returns true if loss based BWE can be used in the start phase.
+  bool UseInStartPhase() const;
+
   // Returns `DataRate::PlusInfinity` if no BWE can be calculated.
   Result GetLossBasedResult() const;
 
@@ -99,6 +102,7 @@ class LossBasedBweV2 {
     double newton_step_size = 0.0;
     bool append_acknowledged_rate_candidate = true;
     bool append_delay_based_estimate_candidate = false;
+    bool append_upper_bound_candidate_in_alr = false;
     TimeDelta observation_duration_lower_bound = TimeDelta::Zero();
     int observation_window_size = 0;
     double sending_rate_smoothing_factor = 0.0;
@@ -117,6 +121,9 @@ class LossBasedBweV2 {
     bool use_in_start_phase = false;
     int min_num_observations = 0;
     double lower_bound_by_acked_rate_factor = 0.0;
+    double hold_duration_factor = 0.0;
+    bool use_byte_loss_rate = false;
+    TimeDelta padding_duration = TimeDelta::Zero();
   };
 
   struct Derivatives {
@@ -131,6 +138,8 @@ class LossBasedBweV2 {
     int num_lost_packets = 0;
     int num_received_packets = 0;
     DataRate sending_rate = DataRate::MinusInfinity();
+    DataSize size = DataSize::Zero();
+    DataSize lost_size = DataSize::Zero();
     int id = -1;
   };
 
@@ -138,6 +147,18 @@ class LossBasedBweV2 {
     int num_packets = 0;
     int num_lost_packets = 0;
     DataSize size = DataSize::Zero();
+    DataSize lost_size = DataSize::Zero();
+  };
+
+  struct PaddingInfo {
+    DataRate padding_rate = DataRate::MinusInfinity();
+    Timestamp padding_timestamp = Timestamp::MinusInfinity();
+  };
+
+  struct HoldInfo {
+    Timestamp timestamp = Timestamp::MinusInfinity();
+    TimeDelta duration = TimeDelta::Zero();
+    DataRate rate = DataRate::PlusInfinity();
   };
 
   static absl::optional<Config> CreateConfig(
@@ -146,6 +167,8 @@ class LossBasedBweV2 {
 
   // Returns `0.0` if not enough loss statistics have been received.
   double GetAverageReportedLossRatio() const;
+  double GetAverageReportedPacketLossRatio() const;
+  double GetAverageReportedByteLossRatio() const;
   std::vector<ChannelParameters> GetCandidates(bool in_alr) const;
   DataRate GetCandidateBandwidthUpperBound() const;
   Derivatives GetDerivatives(const ChannelParameters& channel_parameters) const;
@@ -170,6 +193,7 @@ class LossBasedBweV2 {
   bool IsEstimateIncreasingWhenLossLimited(DataRate old_estimate,
                                            DataRate new_estimate);
   bool IsInLossLimitedState() const;
+  bool CanKeepIncreasingState(DataRate estimate) const;
 
   absl::optional<DataRate> acknowledged_bitrate_;
   absl::optional<Config> config_;
@@ -189,6 +213,8 @@ class LossBasedBweV2 {
   DataRate max_bitrate_ = DataRate::PlusInfinity();
   DataRate delay_based_estimate_ = DataRate::PlusInfinity();
   LossBasedBweV2::Result loss_based_result_ = LossBasedBweV2::Result();
+  HoldInfo last_hold_info_ = HoldInfo();
+  PaddingInfo last_padding_info_ = PaddingInfo();
 };
 
 }  // namespace webrtc

@@ -46,7 +46,9 @@ class StunBindingRequest : public StunRequest {
                     std::make_unique<StunMessage>(STUN_BINDING_REQUEST)),
         port_(port),
         server_addr_(addr),
-        start_time_(start_time) {}
+        start_time_(start_time) {
+    SetAuthenticationRequired(false);
+  }
 
   const rtc::SocketAddress& server_addr() const { return server_addr_; }
 
@@ -404,7 +406,8 @@ void UDPPort::OnReadPacket(rtc::AsyncPacketSocket* socket,
   }
 
   if (Connection* conn = GetConnection(remote_addr)) {
-    conn->OnReadPacket(data, size, packet_time_us);
+    conn->OnReadPacket(
+        rtc::ReceivedPacket::CreateFromLegacy(data, size, packet_time_us));
   } else {
     Port::OnReadPacket(data, size, remote_addr, PROTO_UDP);
   }

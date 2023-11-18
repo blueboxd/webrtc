@@ -18,10 +18,10 @@
 #include <utility>
 #include <vector>
 
-#include "media/base/fake_media_engine.h"
 #include "media/base/media_channel.h"
 #include "pc/channel.h"
 #include "pc/stream_collection.h"
+#include "pc/test/enable_fake_media.h"
 #include "pc/test/fake_data_channel_controller.h"
 #include "pc/test/fake_peer_connection_base.h"
 
@@ -150,7 +150,7 @@ class VoiceChannelForTesting : public cricket::VoiceChannel {
           receive_channel,
       const std::string& content_name,
       bool srtp_required,
-      webrtc::CryptoOptions crypto_options,
+      CryptoOptions crypto_options,
       rtc::UniqueRandomIdGenerator* ssrc_generator,
       std::string transport_name)
       : VoiceChannel(worker_thread,
@@ -183,7 +183,7 @@ class VideoChannelForTesting : public cricket::VideoChannel {
           receive_channel,
       const std::string& content_name,
       bool srtp_required,
-      webrtc::CryptoOptions crypto_options,
+      CryptoOptions crypto_options,
       rtc::UniqueRandomIdGenerator* ssrc_generator,
       std::string transport_name)
       : VideoChannel(worker_thread,
@@ -235,7 +235,7 @@ class FakePeerConnectionForStats : public FakePeerConnectionBase {
     dependencies.network_thread = rtc::Thread::Current();
     dependencies.worker_thread = rtc::Thread::Current();
     dependencies.signaling_thread = rtc::Thread::Current();
-    dependencies.media_engine = std::make_unique<cricket::FakeMediaEngine>();
+    EnableFakeMedia(dependencies);
     return dependencies;
   }
 
@@ -298,7 +298,7 @@ class FakePeerConnectionForStats : public FakePeerConnectionBase {
         worker_thread_, network_thread_, signaling_thread_,
         std::move(voice_media_send_channel),
         std::move(voice_media_receive_channel), mid, kDefaultSrtpRequired,
-        webrtc::CryptoOptions(), context_->ssrc_generator(), transport_name);
+        CryptoOptions(), context_->ssrc_generator(), transport_name);
     auto transceiver =
         GetOrCreateFirstTransceiverOfType(cricket::MEDIA_TYPE_AUDIO)
             ->internal();
@@ -332,7 +332,7 @@ class FakePeerConnectionForStats : public FakePeerConnectionBase {
         worker_thread_, network_thread_, signaling_thread_,
         std::move(video_media_send_channel),
         std::move(video_media_receive_channel), mid, kDefaultSrtpRequired,
-        webrtc::CryptoOptions(), context_->ssrc_generator(), transport_name);
+        CryptoOptions(), context_->ssrc_generator(), transport_name);
     auto transceiver =
         GetOrCreateFirstTransceiverOfType(cricket::MEDIA_TYPE_VIDEO)
             ->internal();

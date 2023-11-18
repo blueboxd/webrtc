@@ -31,6 +31,7 @@
 #include "rtc_base/rate_statistics.h"
 #include "rtc_base/synchronization/mutex.h"
 #include "rtc_base/system/no_unique_address.h"
+#include "rtc_base/system/unused.h"
 #include "rtc_base/task_utils/repeating_task.h"
 #include "rtc_base/thread_annotations.h"
 #include "rtc_base/time_utils.h"
@@ -248,7 +249,7 @@ class FrameCadenceAdapterImpl : public FrameCadenceAdapterInterface {
       const VideoTrackSourceConstraints& constraints) override;
 
  private:
-  // Called from OnFrame in zero-hertz mode.
+  // Called from OnFrame in both pass-through and zero-hertz mode.
   void OnFrameOnMainQueue(Timestamp post_time,
                           int frames_scheduled_for_processing,
                           const VideoFrame& frame) RTC_RUN_ON(queue_);
@@ -275,6 +276,7 @@ class FrameCadenceAdapterImpl : public FrameCadenceAdapterInterface {
   absl::optional<ZeroHertzAdapterMode> zero_hertz_adapter_;
   // If set, zero-hertz mode has been enabled.
   absl::optional<ZeroHertzModeParams> zero_hertz_params_;
+  std::atomic<bool> zero_hertz_adapter_is_active_{false};
   // Cache for the current adapter mode.
   AdapterMode* current_adapter_mode_ = nullptr;
 
@@ -292,7 +294,6 @@ class FrameCadenceAdapterImpl : public FrameCadenceAdapterInterface {
   // Race checker for incoming frames. This is the network thread in chromium,
   // but may vary from test contexts.
   rtc::RaceChecker incoming_frame_race_checker_;
-  bool has_reported_screenshare_frame_rate_umas_ RTC_GUARDED_BY(queue_) = false;
 
   // Number of frames that are currently scheduled for processing on the
   // `queue_`.
@@ -382,6 +383,7 @@ void ZeroHertzAdapterMode::OnFrame(Timestamp post_time,
   queue_->PostDelayedHighPrecisionTask(
       SafeTask(safety_.flag(),
                [this, frame_id, frame] {
+                 RTC_UNUSED(frame_id);
                  RTC_DCHECK_RUN_ON(&sequence_checker_);
                  TRACE_EVENT_ASYNC_END0(TRACE_DISABLED_BY_DEFAULT("webrtc"),
                                         "QueueToEncode", frame_id);
@@ -607,8 +609,6 @@ void FrameCadenceAdapterImpl::SetZeroHertzModeEnabled(
     absl::optional<ZeroHertzModeParams> params) {
   RTC_DCHECK_RUN_ON(queue_);
   bool was_zero_hertz_enabled = zero_hertz_params_.has_value();
-  if (params.has_value() && !was_zero_hertz_enabled)
-    has_reported_screenshare_frame_rate_umas_ = false;
   zero_hertz_params_ = params;
   MaybeReconfigureAdapters(was_zero_hertz_enabled);
 }
@@ -655,14 +655,21 @@ void FrameCadenceAdapterImpl::OnFrame(const VideoFrame& frame) {
   // Local time in webrtc time base.
   Timestamp post_time = clock_->CurrentTime();
   frames_scheduled_for_processing_.fetch_add(1, std::memory_order_relaxed);
-  TRACE_EVENT_ASYNC_BEGIN0(TRACE_DISABLED_BY_DEFAULT("webrtc"),
-                           "OnFrameToEncode", frame.video_frame_buffer().get());
-  TRACE_EVENT_ASYNC_BEGIN0(TRACE_DISABLED_BY_DEFAULT("webrtc"),
-                           "OnFrameToQueue", frame.video_frame_buffer().get());
+  if (zero_hertz_adapter_is_active_.load(std::memory_order_relaxed)) {
+    TRACE_EVENT_ASYNC_BEGIN0(TRACE_DISABLED_BY_DEFAULT("webrtc"),
+                             "OnFrameToEncode",
+                             frame.video_frame_buffer().get());
+    TRACE_EVENT_ASYNC_BEGIN0(TRACE_DISABLED_BY_DEFAULT("webrtc"),
+                             "OnFrameToQueue",
+                             frame.video_frame_buffer().get());
+  }
   queue_->PostTask(SafeTask(safety_.flag(), [this, post_time, frame] {
     RTC_DCHECK_RUN_ON(queue_);
-    TRACE_EVENT_ASYNC_END0(TRACE_DISABLED_BY_DEFAULT("webrtc"),
-                           "OnFrameToQueue", frame.video_frame_buffer().get());
+    if (zero_hertz_adapter_is_active_.load(std::memory_order_relaxed)) {
+      TRACE_EVENT_ASYNC_END0(TRACE_DISABLED_BY_DEFAULT("webrtc"),
+                             "OnFrameToQueue",
+                             frame.video_frame_buffer().get());
+    }
     if (zero_hertz_adapter_created_timestamp_.has_value()) {
       TimeDelta time_until_first_frame =
           clock_->CurrentTime() - *zero_hertz_adapter_created_timestamp_;
@@ -725,17 +732,24 @@ void FrameCadenceAdapterImpl::MaybeReconfigureAdapters(
   RTC_DCHECK_RUN_ON(queue_);
   bool is_zero_hertz_enabled = IsZeroHertzScreenshareEnabled();
   if (is_zero_hertz_enabled) {
-    if (!was_zero_hertz_enabled) {
+    bool max_fps_has_changed = GetInputFrameRateFps().value_or(-1) !=
+                               source_constraints_->max_fps.value_or(-1);
+    if (!was_zero_hertz_enabled || max_fps_has_changed) {
       zero_hertz_adapter_.emplace(queue_, clock_, callback_,
                                   source_constraints_->max_fps.value());
-      RTC_LOG(LS_INFO) << "Zero hertz mode activated.";
+      zero_hertz_adapter_is_active_.store(true, std::memory_order_relaxed);
+      RTC_LOG(LS_INFO) << "Zero hertz mode enabled (max_fps="
+                       << source_constraints_->max_fps.value() << ")";
       zero_hertz_adapter_created_timestamp_ = clock_->CurrentTime();
     }
     zero_hertz_adapter_->ReconfigureParameters(zero_hertz_params_.value());
     current_adapter_mode_ = &zero_hertz_adapter_.value();
   } else {
-    if (was_zero_hertz_enabled)
+    if (was_zero_hertz_enabled) {
       zero_hertz_adapter_ = absl::nullopt;
+      zero_hertz_adapter_is_active_.store(false, std::memory_order_relaxed);
+      RTC_LOG(LS_INFO) << "Zero hertz mode disabled.";
+    }
     current_adapter_mode_ = &passthrough_adapter_.value();
   }
 }

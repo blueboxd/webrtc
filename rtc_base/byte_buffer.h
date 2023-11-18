@@ -16,7 +16,9 @@
 
 #include <string>
 
+#include "absl/base/attributes.h"
 #include "absl/strings/string_view.h"
+#include "api/array_view.h"
 #include "rtc_base/buffer.h"
 #include "rtc_base/byte_order.h"
 
@@ -124,10 +126,11 @@ class ByteBufferReader {
  public:
   ByteBufferReader(const char* bytes, size_t len);
 
+  explicit ByteBufferReader(
+      rtc::ArrayView<const uint8_t> bytes ABSL_ATTRIBUTE_LIFETIME_BOUND);
+
   // Initializes buffer from a zero-terminated string.
   explicit ByteBufferReader(const char* bytes);
-
-  explicit ByteBufferReader(const Buffer& buf);
 
   explicit ByteBufferReader(const ByteBufferWriter& buf);
 
@@ -135,9 +138,16 @@ class ByteBufferReader {
   ByteBufferReader& operator=(const ByteBufferReader&) = delete;
 
   // Returns start of unprocessed data.
-  const char* Data() const { return bytes_ + start_; }
+  // TODO(bugs.webrtc.org/15661): Deprecate and remove.
+  const char* Data() const {
+    return reinterpret_cast<const char*>(bytes_ + start_);
+  }
   // Returns number of unprocessed bytes.
   size_t Length() const { return end_ - start_; }
+  // Returns a view of the unprocessed data.
+  rtc::ArrayView<const uint8_t> DataView() {
+    return rtc::ArrayView<const uint8_t>(bytes_ + start_, end_ - start_);
+  }
 
   // Read a next value from the buffer. Return false if there isn't
   // enough data left for the specified type.
@@ -160,9 +170,9 @@ class ByteBufferReader {
   bool Consume(size_t size);
 
  protected:
-  void Construct(const char* bytes, size_t size);
+  void Construct(const uint8_t* bytes, size_t size);
 
-  const char* bytes_;
+  const uint8_t* bytes_;
   size_t size_;
   size_t start_;
   size_t end_;

@@ -112,9 +112,9 @@ void RtpSendParametersFromMediaDescription(
 }
 
 BaseChannel::BaseChannel(
-    rtc::Thread* worker_thread,
+    webrtc::TaskQueueBase* worker_thread,
     rtc::Thread* network_thread,
-    rtc::Thread* signaling_thread,
+    webrtc::TaskQueueBase* signaling_thread,
     std::unique_ptr<MediaSendChannelInterface> send_media_channel_impl,
     std::unique_ptr<MediaReceiveChannelInterface> receive_media_channel_impl,
     absl::string_view mid,
@@ -819,9 +819,9 @@ void BaseChannel::SignalSentPacket_n(const rtc::SentPacket& sent_packet) {
 }
 
 VoiceChannel::VoiceChannel(
-    rtc::Thread* worker_thread,
+    webrtc::TaskQueueBase* worker_thread,
     rtc::Thread* network_thread,
-    rtc::Thread* signaling_thread,
+    webrtc::TaskQueueBase* signaling_thread,
     std::unique_ptr<VoiceMediaSendChannelInterface> media_send_channel,
     std::unique_ptr<VoiceMediaReceiveChannelInterface> media_receive_channel,
     absl::string_view mid,
@@ -844,19 +844,6 @@ VoiceChannel::~VoiceChannel() {
   DisableMedia_w();
 }
 
-void VoiceChannel::InitCallback() {
-  RTC_DCHECK_RUN_ON(worker_thread());
-  // TODO(bugs.webrtc.org/13931): Remove when values are set
-  // in a more sensible fashion
-  send_channel()->SetSendCodecChangedCallback([this]() {
-    RTC_DCHECK_RUN_ON(worker_thread());
-    // Adjust receive streams based on send codec.
-    receive_channel()->SetReceiveNackEnabled(
-        send_channel()->SendCodecHasNack());
-    receive_channel()->SetReceiveNonSenderRttEnabled(
-        send_channel()->SenderNonSenderRttEnabled());
-  });
-}
 void VoiceChannel::UpdateMediaSendRecvState_w() {
   // Render incoming data if we're the active call, and we have the local
   // content. We receive data on the default channel and multiplexed streams.
@@ -965,9 +952,9 @@ bool VoiceChannel::SetRemoteContent_w(const MediaContentDescription* content,
 }
 
 VideoChannel::VideoChannel(
-    rtc::Thread* worker_thread,
+    webrtc::TaskQueueBase* worker_thread,
     rtc::Thread* network_thread,
-    rtc::Thread* signaling_thread,
+    webrtc::TaskQueueBase* signaling_thread,
     std::unique_ptr<VideoMediaSendChannelInterface> media_send_channel,
     std::unique_ptr<VideoMediaReceiveChannelInterface> media_receive_channel,
     absl::string_view mid,
@@ -1045,7 +1032,7 @@ bool VideoChannel::SetLocalContent_w(const MediaContentDescription* content,
     webrtc::flat_set<const VideoCodec*> matched_codecs;
     for (VideoCodec& send_codec : send_params.codecs) {
       if (absl::c_any_of(matched_codecs, [&](const VideoCodec* c) {
-            return send_codec.Matches(*c);
+            return send_codec.MatchesWithoutPacketization(*c);
           })) {
         continue;
       }
@@ -1161,7 +1148,7 @@ bool VideoChannel::SetRemoteContent_w(const MediaContentDescription* content,
     webrtc::flat_set<const VideoCodec*> matched_codecs;
     for (VideoCodec& recv_codec : recv_params.codecs) {
       if (absl::c_any_of(matched_codecs, [&](const VideoCodec* c) {
-            return recv_codec.Matches(*c);
+            return recv_codec.MatchesWithoutPacketization(*c);
           })) {
         continue;
       }

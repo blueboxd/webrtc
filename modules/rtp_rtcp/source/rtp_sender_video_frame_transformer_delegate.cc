@@ -10,6 +10,7 @@
 
 #include "modules/rtp_rtcp/source/rtp_sender_video_frame_transformer_delegate.h"
 
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -17,6 +18,7 @@
 #include "api/task_queue/task_queue_factory.h"
 #include "modules/rtp_rtcp/source/rtp_descriptor_authentication.h"
 #include "rtc_base/checks.h"
+#include "rtc_base/logging.h"
 
 namespace webrtc {
 namespace {
@@ -97,6 +99,13 @@ class TransformableVideoSenderFrame : public TransformableVideoFrameInterface {
   }
 
   Direction GetDirection() const override { return Direction::kSender; }
+  std::string GetMimeType() const override {
+    if (!codec_type_.has_value()) {
+      return "video/x-unknown";
+    }
+    std::string mime_type = "video/";
+    return mime_type + CodecTypeToPayloadString(*codec_type_);
+  }
 
  private:
   rtc::scoped_refptr<EncodedImageBufferInterface> encoded_data_;
@@ -139,6 +148,17 @@ bool RTPSenderVideoFrameTransformerDelegate::TransformFrame(
     const EncodedImage& encoded_image,
     RTPVideoHeader video_header,
     TimeDelta expected_retransmission_time) {
+  {
+    MutexLock lock(&sender_lock_);
+    if (short_circuit_) {
+      sender_->SendVideo(payload_type, codec_type, rtp_timestamp,
+                         encoded_image.CaptureTime(),
+                         *encoded_image.GetEncodedData(), encoded_image.size(),
+                         video_header, expected_retransmission_time,
+                         /*csrcs=*/{});
+      return true;
+    }
+  }
   frame_transformer_->Transform(std::make_unique<TransformableVideoSenderFrame>(
       encoded_image, video_header, payload_type, codec_type, rtp_timestamp,
       expected_retransmission_time, ssrc_,
@@ -159,6 +179,11 @@ void RTPSenderVideoFrameTransformerDelegate::OnTransformedFrame(
         RTC_DCHECK_RUN_ON(delegate->transformation_queue_.get());
         delegate->SendVideo(std::move(frame));
       });
+}
+
+void RTPSenderVideoFrameTransformerDelegate::StartShortCircuiting() {
+  MutexLock lock(&sender_lock_);
+  short_circuit_ = true;
 }
 
 void RTPSenderVideoFrameTransformerDelegate::SendVideo(

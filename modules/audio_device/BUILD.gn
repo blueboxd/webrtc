@@ -48,6 +48,7 @@ rtc_source_set("audio_device_api") {
     "include/audio_device_defines.h",
   ]
   deps = [
+    "../../api:ref_count",
     "../../api:scoped_refptr",
     "../../api/task_queue",
     "../../rtc_base:checks",
@@ -481,7 +482,6 @@ if (rtc_include_tests && !build_with_chromium) {
       "../../common_audio",
       "../../rtc_base:buffer",
       "../../rtc_base:checks",
-      "../../rtc_base:ignore_wundef",
       "../../rtc_base:logging",
       "../../rtc_base:macromagic",
       "../../rtc_base:race_checker",
