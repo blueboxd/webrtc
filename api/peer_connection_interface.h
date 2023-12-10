@@ -80,12 +80,10 @@
 #include "absl/types/optional.h"
 #include "api/adaptation/resource.h"
 #include "api/async_dns_resolver.h"
-#include "api/async_resolver_factory.h"
 #include "api/audio/audio_mixer.h"
 #include "api/audio_codecs/audio_decoder_factory.h"
 #include "api/audio_codecs/audio_encoder_factory.h"
 #include "api/audio_options.h"
-#include "api/call/call_factory_interface.h"
 #include "api/candidate.h"
 #include "api/crypto/crypto_options.h"
 #include "api/data_channel_interface.h"
@@ -665,10 +663,6 @@ class RTC_EXPORT PeerConnectionInterface : public webrtc::RefCountInterface {
 
     // Added to be able to control rollout of this feature.
     bool enable_implicit_rollback = false;
-
-    // Whether network condition based codec switching is allowed.
-    // TODO(bugs.webrtc.org/11341): Remove this unsupported config value.
-    absl::optional<bool> allow_codec_switching;
 
     // The delay before doing a usage histogram report for long-lived
     // PeerConnections. Used for testing only.
@@ -1391,13 +1385,6 @@ struct RTC_EXPORT PeerConnectionDependencies final {
   // Factory for creating resolvers that look up hostnames in DNS
   std::unique_ptr<webrtc::AsyncDnsResolverFactoryInterface>
       async_dns_resolver_factory;
-  // Deprecated - use async_dns_resolver_factory
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-  [[deprecated("Use async_dns_resolver_factory")]] std::unique_ptr<
-      webrtc::AsyncResolverFactory>
-      async_resolver_factory;
-#pragma clang diagnostic pop
   std::unique_ptr<webrtc::IceTransportFactory> ice_transport_factory;
   std::unique_ptr<rtc::RTCCertificateGeneratorInterface> cert_generator;
   std::unique_ptr<rtc::SSLCertificateVerifier> tls_cert_verifier;
@@ -1436,10 +1423,6 @@ struct RTC_EXPORT PeerConnectionFactoryDependencies final {
   // called without a `port_allocator`.
   std::unique_ptr<rtc::PacketSocketFactory> packet_socket_factory;
   std::unique_ptr<TaskQueueFactory> task_queue_factory;
-  // TODO(bugs.webrtc.org/15574): Delete `media_engine` and `call_factory`
-  // after 2023-12-01
-  [[deprecated]] std::unique_ptr<cricket::MediaEngineInterface> media_engine;
-  [[deprecated]] std::unique_ptr<CallFactoryInterface> call_factory;
   std::unique_ptr<RtcEventLogFactoryInterface> event_log_factory;
   std::unique_ptr<FecControllerFactoryInterface> fec_controller_factory;
   std::unique_ptr<NetworkStatePredictorFactoryInterface>
@@ -1457,7 +1440,8 @@ struct RTC_EXPORT PeerConnectionFactoryDependencies final {
   std::unique_ptr<FieldTrialsView> trials;
   std::unique_ptr<RtpTransportControllerSendFactoryInterface>
       transport_controller_send_factory;
-  std::unique_ptr<Metronome> metronome;
+  // Metronome used for decoding, must be called on the worker thread.
+  std::unique_ptr<Metronome> decode_metronome;
 
   // Media specific dependencies. Unused when `media_factory == nullptr`.
   rtc::scoped_refptr<AudioDeviceModule> adm;

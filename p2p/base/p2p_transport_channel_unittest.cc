@@ -26,7 +26,6 @@
 #include "p2p/base/fake_port_allocator.h"
 #include "p2p/base/ice_transport_internal.h"
 #include "p2p/base/mock_active_ice_controller.h"
-#include "p2p/base/mock_async_resolver.h"
 #include "p2p/base/mock_ice_controller.h"
 #include "p2p/base/packet_transport_internal.h"
 #include "p2p/base/test_stun_server.h"
@@ -285,7 +284,7 @@ class P2PTransportChannelTestBase : public ::testing::Test,
         ss_(new rtc::FirewallSocketServer(nss_.get())),
         socket_factory_(new rtc::BasicPacketSocketFactory(ss_.get())),
         main_(ss_.get()),
-        stun_server_(TestStunServer::Create(ss_.get(), kStunAddr)),
+        stun_server_(TestStunServer::Create(ss_.get(), kStunAddr, main_)),
         turn_server_(&main_, ss_.get(), kTurnUdpIntAddr, kTurnUdpExtAddr),
         socks_server1_(ss_.get(),
                        kSocksProxyAddrs[0],
@@ -488,8 +487,10 @@ class P2PTransportChannelTestBase : public ::testing::Test,
         this, &P2PTransportChannelTestBase::OnReadyToSend);
     channel->SignalCandidateGathered.connect(
         this, &P2PTransportChannelTestBase::OnCandidateGathered);
-    channel->SignalCandidatesRemoved.connect(
-        this, &P2PTransportChannelTestBase::OnCandidatesRemoved);
+    channel->SetCandidatesRemovedCallback(
+        [this](IceTransportInternal* transport, const Candidates& candidates) {
+          OnCandidatesRemoved(transport, candidates);
+        });
     channel->SignalReadPacket.connect(
         this, &P2PTransportChannelTestBase::OnReadPacket);
     channel->SignalRoleConflict.connect(
@@ -1025,7 +1026,7 @@ class P2PTransportChannelTestBase : public ::testing::Test,
   rtc::AutoSocketServerThread main_;
   rtc::scoped_refptr<PendingTaskSafetyFlag> safety_ =
       PendingTaskSafetyFlag::Create();
-  std::unique_ptr<TestStunServer> stun_server_;
+  TestStunServer::StunServerPtr stun_server_;
   TestTurnServer turn_server_;
   rtc::SocksProxyServer socks_server1_;
   rtc::SocksProxyServer socks_server2_;
@@ -3481,8 +3482,10 @@ class P2PTransportChannelPingTest : public ::testing::Test,
                                   &P2PTransportChannelPingTest::OnReadyToSend);
     ch->SignalStateChanged.connect(
         this, &P2PTransportChannelPingTest::OnChannelStateChanged);
-    ch->SignalCandidatePairChanged.connect(
-        this, &P2PTransportChannelPingTest::OnCandidatePairChanged);
+    ch->SetCandidatePairChangeCallback(
+        [this](const cricket::CandidatePairChangeEvent& event) {
+          OnCandidatePairChanged(event);
+        });
   }
 
   Connection* WaitForConnectionTo(

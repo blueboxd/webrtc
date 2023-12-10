@@ -433,22 +433,36 @@ JsepTransportController::CreateDtlsTransport(
       this, &JsepTransportController::OnTransportWritableState_n);
   dtls->SignalReceivingState.connect(
       this, &JsepTransportController::OnTransportReceivingState_n);
-  dtls->ice_transport()->SignalGatheringState.connect(
-      this, &JsepTransportController::OnTransportGatheringState_n);
+  dtls->ice_transport()->SetGatheringStateCallback(
+      [this](cricket::IceTransportInternal* transport) {
+        RTC_DCHECK_RUN_ON(network_thread_);
+        OnTransportGatheringState_n(transport);
+      });
   dtls->ice_transport()->SignalCandidateGathered.connect(
       this, &JsepTransportController::OnTransportCandidateGathered_n);
-  dtls->ice_transport()->SignalCandidateError.connect(
-      this, &JsepTransportController::OnTransportCandidateError_n);
-  dtls->ice_transport()->SignalCandidatesRemoved.connect(
-      this, &JsepTransportController::OnTransportCandidatesRemoved_n);
+  dtls->ice_transport()->SetCandidateErrorCallback(
+      [this](cricket::IceTransportInternal* transport,
+             const cricket::IceCandidateErrorEvent& error) {
+        RTC_DCHECK_RUN_ON(network_thread_);
+        OnTransportCandidateError_n(transport, error);
+      });
+  dtls->ice_transport()->SetCandidatesRemovedCallback(
+      [this](cricket::IceTransportInternal* transport,
+             const cricket::Candidates& candidates) {
+        RTC_DCHECK_RUN_ON(network_thread_);
+        OnTransportCandidatesRemoved_n(transport, candidates);
+      });
   dtls->ice_transport()->SignalRoleConflict.connect(
       this, &JsepTransportController::OnTransportRoleConflict_n);
   dtls->ice_transport()->SignalStateChanged.connect(
       this, &JsepTransportController::OnTransportStateChanged_n);
   dtls->ice_transport()->SignalIceTransportStateChanged.connect(
       this, &JsepTransportController::OnTransportStateChanged_n);
-  dtls->ice_transport()->SignalCandidatePairChanged.connect(
-      this, &JsepTransportController::OnTransportCandidatePairChanged_n);
+  dtls->ice_transport()->SetCandidatePairChangeCallback(
+      [this](const cricket::CandidatePairChangeEvent& event) {
+        RTC_DCHECK_RUN_ON(network_thread_);
+        OnTransportCandidatePairChanged_n(event);
+      });
 
   dtls->SubscribeDtlsHandshakeError(
       [this](rtc::SSLHandshakeError error) { OnDtlsHandshakeError(error); });

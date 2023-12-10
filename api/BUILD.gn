@@ -26,15 +26,6 @@ rtc_source_set("call_api") {
   sources = [ "call/audio_sink.h" ]
 }
 
-rtc_source_set("callfactory_api") {
-  visibility = [ "*" ]
-  sources = [ "call/call_factory_interface.h" ]
-  deps = [
-    "../call:rtp_interfaces",
-    "../rtc_base/system:rtc_export",
-  ]
-}
-
 rtc_source_set("enable_media") {
   visibility = [ "*" ]
   sources = [
@@ -47,6 +38,7 @@ rtc_source_set("enable_media") {
     "../media:rtc_audio_video",
     "../pc:media_factory",
     "../rtc_base/system:rtc_export",
+    "environment",
   ]
 }
 
@@ -54,7 +46,7 @@ rtc_source_set("enable_media_with_defaults") {
   visibility = [ "*" ]
   allow_poison = [
     "audio_codecs",
-    "default_task_queue",
+    "environment_construction",
     "software_video_codecs",
   ]
   sources = [
@@ -77,7 +69,7 @@ rtc_source_set("enable_media_with_defaults") {
 if (!build_with_chromium) {
   rtc_library("create_peerconnection_factory") {
     visibility = [ "*" ]
-    allow_poison = [ "default_task_queue" ]
+    allow_poison = [ "environment_construction" ]
     sources = [
       "create_peerconnection_factory.cc",
       "create_peerconnection_factory.h",
@@ -318,7 +310,6 @@ rtc_library("libjingle_peerconnection_api") {
     ":array_view",
     ":async_dns_resolver",
     ":audio_options_api",
-    ":callfactory_api",
     ":candidate",
     ":dtls_transport_interface",
     ":fec_controller_api",
@@ -429,15 +420,10 @@ rtc_library("rtc_error") {
 
 rtc_source_set("packet_socket_factory") {
   visibility = [ "*" ]
-  sources = [
-    "async_resolver_factory.h",
-    "packet_socket_factory.h",
-  ]
+  sources = [ "packet_socket_factory.h" ]
   deps = [
     ":async_dns_resolver",
-    ":wrapping_async_dns_resolver",
     "../rtc_base:async_packet_socket",
-    "../rtc_base:async_resolver_interface",
     "../rtc_base:proxy_info",
     "../rtc_base:socket_address",
     "../rtc_base/system:rtc_export",
@@ -453,28 +439,6 @@ rtc_source_set("async_dns_resolver") {
     "../rtc_base/system:rtc_export",
   ]
   absl_deps = [ "//third_party/abseil-cpp/absl/functional:any_invocable" ]
-}
-
-rtc_source_set("wrapping_async_dns_resolver") {
-  visibility = [
-    ":*",
-    "../p2p:rtc_p2p",
-  ]
-  sources = [
-    "wrapping_async_dns_resolver.cc",
-    "wrapping_async_dns_resolver.h",
-  ]
-  deps = [
-    ":async_dns_resolver",
-    ":sequence_checker",
-    "../rtc_base:async_resolver_interface",
-    "../rtc_base:checks",
-    "../rtc_base:macromagic",
-    "../rtc_base:socket_address",
-    "../rtc_base:threading",
-    "../rtc_base/third_party/sigslot",
-  ]
-  absl_deps = [ "//third_party/abseil-cpp/absl/memory" ]
 }
 
 rtc_source_set("ref_count") {
@@ -602,7 +566,6 @@ rtc_source_set("peer_connection_quality_test_fixture_api") {
   deps = [
     ":array_view",
     ":audio_quality_analyzer_api",
-    ":callfactory_api",
     ":fec_controller_api",
     ":frame_generator_api",
     ":function_view",
@@ -670,6 +633,7 @@ if (rtc_include_tests) {
       "test/create_network_emulation_manager.h",
     ]
     deps = [
+      ":field_trials_view",
       ":network_emulation_manager_api",
       "../test/network:emulated_network",
     ]
@@ -1422,17 +1386,17 @@ if (rtc_include_tests) {
     ]
 
     deps = [
-      ":callfactory_api",
       ":enable_media_with_defaults",
       ":libjingle_peerconnection_api",
       ":time_controller",
       "../call",
       "../call:call_interfaces",
-      "../call:rtp_interfaces",
       "../pc:media_factory",
       "../rtc_base:checks",
       "../system_wrappers",
       "../test/time_controller",
+      "environment",
+      "environment:environment_factory",
     ]
     absl_deps = [ "//third_party/abseil-cpp/absl/base:nullability" ]
   }
@@ -1484,6 +1448,7 @@ if (rtc_include_tests) {
       "../test:fileutils",
       "../test:rtc_expect_death",
       "../test:test_support",
+      "environment:environment_unittests",
       "task_queue:task_queue_default_factory_unittests",
       "test/pclf:media_configuration",
       "test/video:video_frame_writer",

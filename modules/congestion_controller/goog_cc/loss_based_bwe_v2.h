@@ -86,6 +86,8 @@ class LossBasedBweV2 {
 
   struct Config {
     double bandwidth_rampup_upper_bound_factor = 0.0;
+    double bandwidth_rampup_upper_bound_factor_in_hold = 0;
+    double bandwidth_rampup_hold_threshold = 0;
     double rampup_acceleration_max_factor = 0.0;
     TimeDelta rampup_acceleration_maxout_time = TimeDelta::Zero();
     std::vector<double> candidate_factors;
@@ -114,9 +116,6 @@ class LossBasedBweV2 {
     double max_increase_factor = 0.0;
     TimeDelta delayed_increase_window = TimeDelta::Zero();
     bool not_increase_if_inherent_loss_less_than_average_loss = false;
-    double high_loss_rate_threshold = 1.0;
-    DataRate bandwidth_cap_at_high_loss_rate = DataRate::MinusInfinity();
-    double slope_of_bwe_high_loss_func = 1000.0;
     bool not_use_acked_rate_in_alr = false;
     bool use_in_start_phase = false;
     int min_num_observations = 0;
@@ -124,6 +123,7 @@ class LossBasedBweV2 {
     double hold_duration_factor = 0.0;
     bool use_byte_loss_rate = false;
     TimeDelta padding_duration = TimeDelta::Zero();
+    bool bound_best_candidate = false;
   };
 
   struct Derivatives {
@@ -189,7 +189,6 @@ class LossBasedBweV2 {
 
   // Returns false if no observation was created.
   bool PushBackObservation(rtc::ArrayView<const PacketResult> packet_results);
-  void UpdateResult();
   bool IsEstimateIncreasingWhenLossLimited(DataRate old_estimate,
                                            DataRate new_estimate);
   bool IsInLossLimitedState() const;

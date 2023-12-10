@@ -73,7 +73,6 @@
 #include "modules/audio_processing/test/audio_processing_builder_for_testing.h"
 #include "p2p/base/fake_ice_transport.h"
 #include "p2p/base/ice_transport_internal.h"
-#include "p2p/base/mock_async_resolver.h"
 #include "p2p/base/p2p_constants.h"
 #include "p2p/base/port.h"
 #include "p2p/base/port_allocator.h"
@@ -774,7 +773,7 @@ class PeerConnectionIntegrationWrapper : public PeerConnectionObserver,
     pc_factory_dependencies.task_queue_factory =
         CreateDefaultTaskQueueFactory();
     pc_factory_dependencies.trials = std::make_unique<FieldTrialBasedConfig>();
-    pc_factory_dependencies.metronome =
+    pc_factory_dependencies.decode_metronome =
         std::make_unique<TaskQueueMetronome>(TimeDelta::Millis(8));
 
     pc_factory_dependencies.adm = fake_audio_capture_module_;
@@ -801,8 +800,7 @@ class PeerConnectionIntegrationWrapper : public PeerConnectionObserver,
       pc_factory_dependencies.event_log_factory = std::move(event_log_factory);
     } else {
       pc_factory_dependencies.event_log_factory =
-          std::make_unique<RtcEventLogFactory>(
-              pc_factory_dependencies.task_queue_factory.get());
+          std::make_unique<RtcEventLogFactory>();
     }
     peer_connection_factory_ =
         CreateModularPeerConnectionFactory(std::move(pc_factory_dependencies));

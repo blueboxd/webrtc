@@ -28,7 +28,6 @@
 #include "absl/memory/memory.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
-#include "api/async_resolver_factory.h"
 #include "api/candidate.h"
 #include "api/crypto/crypto_options.h"
 #include "api/dtmf_sender_interface.h"
@@ -61,7 +60,6 @@
 #include "media/base/codec.h"
 #include "media/base/media_constants.h"
 #include "media/base/stream_params.h"
-#include "p2p/base/mock_async_resolver.h"
 #include "p2p/base/port.h"
 #include "p2p/base/port_allocator.h"
 #include "p2p/base/port_interface.h"
@@ -103,6 +101,12 @@
 namespace webrtc {
 
 namespace {
+
+using ::testing::AtLeast;
+using ::testing::InSequence;
+using ::testing::MockFunction;
+using ::testing::NiceMock;
+using ::testing::Return;
 
 class PeerConnectionIntegrationTest
     : public PeerConnectionIntegrationBaseTest,
@@ -1086,11 +1090,7 @@ void ModifyPayloadTypesAndRemoveMidExtension(
                                     }),
                      extensions.end());
     media->set_rtp_header_extensions(extensions);
-    cricket::VideoContentDescription* video = media->as_video();
-    ASSERT_TRUE(video != nullptr);
-    std::vector<cricket::VideoCodec> codecs = {
-        cricket::CreateVideoCodec(pt++, "VP8")};
-    video->set_codecs(codecs);
+    media->set_codecs({cricket::CreateVideoCodec(pt++, "VP8")});
   }
 }
 
@@ -1755,8 +1755,8 @@ class PeerConnectionIntegrationIceStatesTest
   }
 
   void StartStunServer(const SocketAddress& server_address) {
-    stun_server_.reset(
-        cricket::TestStunServer::Create(firewall(), server_address));
+    stun_server_ = cricket::TestStunServer::Create(firewall(), server_address,
+                                                   *network_thread());
   }
 
   bool TestIPv6() {
@@ -1802,7 +1802,7 @@ class PeerConnectionIntegrationIceStatesTest
 
  private:
   uint32_t port_allocator_flags_;
-  std::unique_ptr<cricket::TestStunServer> stun_server_;
+  cricket::TestStunServer::StunServerPtr stun_server_;
 };
 
 // Ensure FakeClockForTest is constructed first (see class for rationale).
@@ -2816,18 +2816,70 @@ TEST_P(PeerConnectionIntegrationTest, RtcEventLogOutputWriteCalled) {
   ASSERT_TRUE(CreatePeerConnectionWrappers());
   ConnectFakeSignaling();
 
-  auto output = std::make_unique<testing::NiceMock<MockRtcEventLogOutput>>();
-  ON_CALL(*output, IsActive()).WillByDefault(::testing::Return(true));
-  ON_CALL(*output, Write(::testing::A<absl::string_view>()))
-      .WillByDefault(::testing::Return(true));
-  EXPECT_CALL(*output, Write(::testing::A<absl::string_view>()))
-      .Times(::testing::AtLeast(1));
+  auto output = std::make_unique<NiceMock<MockRtcEventLogOutput>>();
+  ON_CALL(*output, IsActive).WillByDefault(Return(true));
+  ON_CALL(*output, Write).WillByDefault(Return(true));
+  EXPECT_CALL(*output, Write).Times(AtLeast(1));
   EXPECT_TRUE(caller()->pc()->StartRtcEventLog(std::move(output),
                                                RtcEventLog::kImmediateOutput));
 
   caller()->AddAudioVideoTracks();
   caller()->CreateAndSetAndSignalOffer();
   ASSERT_TRUE_WAIT(SignalingStateStable(), kDefaultTimeout);
+}
+
+TEST_P(PeerConnectionIntegrationTest, RtcEventLogOutputWriteCalledOnStop) {
+  // This test uses check point to ensure log is written before peer connection
+  // is destroyed.
+  // https://google.github.io/googletest/gmock_cook_book.html#UsingCheckPoints
+  MockFunction<void()> test_is_complete;
+  ASSERT_TRUE(CreatePeerConnectionWrappers());
+  ConnectFakeSignaling();
+
+  auto output = std::make_unique<NiceMock<MockRtcEventLogOutput>>();
+  ON_CALL(*output, IsActive).WillByDefault(Return(true));
+  ON_CALL(*output, Write).WillByDefault(Return(true));
+  InSequence s;
+  EXPECT_CALL(*output, Write).Times(AtLeast(1));
+  EXPECT_CALL(test_is_complete, Call);
+
+  // Use large output period to prevent this test pass for the wrong reason.
+  EXPECT_TRUE(caller()->pc()->StartRtcEventLog(std::move(output),
+                                               /*output_period_ms=*/100'000));
+
+  caller()->AddAudioVideoTracks();
+  caller()->CreateAndSetAndSignalOffer();
+  ASSERT_TRUE_WAIT(SignalingStateStable(), kDefaultTimeout);
+
+  caller()->pc()->StopRtcEventLog();
+  test_is_complete.Call();
+}
+
+TEST_P(PeerConnectionIntegrationTest, RtcEventLogOutputWriteCalledOnClose) {
+  // This test uses check point to ensure log is written before peer connection
+  // is destroyed.
+  // https://google.github.io/googletest/gmock_cook_book.html#UsingCheckPoints
+  MockFunction<void()> test_is_complete;
+  ASSERT_TRUE(CreatePeerConnectionWrappers());
+  ConnectFakeSignaling();
+
+  auto output = std::make_unique<NiceMock<MockRtcEventLogOutput>>();
+  ON_CALL(*output, IsActive).WillByDefault(Return(true));
+  ON_CALL(*output, Write).WillByDefault(Return(true));
+  InSequence s;
+  EXPECT_CALL(*output, Write).Times(AtLeast(1));
+  EXPECT_CALL(test_is_complete, Call);
+
+  // Use large output period to prevent this test pass for the wrong reason.
+  EXPECT_TRUE(caller()->pc()->StartRtcEventLog(std::move(output),
+                                               /*output_period_ms=*/100'000));
+
+  caller()->AddAudioVideoTracks();
+  caller()->CreateAndSetAndSignalOffer();
+  ASSERT_TRUE_WAIT(SignalingStateStable(), kDefaultTimeout);
+
+  caller()->pc()->Close();
+  test_is_complete.Call();
 }
 
 // Test that if candidates are only signaled by applying full session
@@ -3757,11 +3809,10 @@ TEST_F(PeerConnectionIntegrationTestUnifiedPlan,
   // codecs.
   caller()->SetGeneratedSdpMunger([](cricket::SessionDescription* desc) {
     for (ContentInfo& content : desc->contents()) {
-      cricket::AudioContentDescription* media =
-          content.media_description()->as_audio();
-      std::vector<cricket::AudioCodec> codecs = media->codecs();
-      std::vector<cricket::AudioCodec> codecs_out;
-      for (cricket::AudioCodec codec : codecs) {
+      cricket::MediaContentDescription* media = content.media_description();
+      std::vector<cricket::Codec> codecs = media->codecs();
+      std::vector<cricket::Codec> codecs_out;
+      for (cricket::Codec codec : codecs) {
         if (codec.name == "opus") {
           codec.AddFeedbackParam(cricket::FeedbackParam(
               cricket::kRtcpFbParamNack, cricket::kParamValueEmpty));
@@ -3808,11 +3859,10 @@ TEST_F(PeerConnectionIntegrationTestUnifiedPlan, VideoPacketLossCausesNack) {
   // codecs.
   caller()->SetGeneratedSdpMunger([](cricket::SessionDescription* desc) {
     for (ContentInfo& content : desc->contents()) {
-      cricket::VideoContentDescription* media =
-          content.media_description()->as_video();
-      std::vector<cricket::VideoCodec> codecs = media->codecs();
-      std::vector<cricket::VideoCodec> codecs_out;
-      for (cricket::VideoCodec codec : codecs) {
+      cricket::MediaContentDescription* media = content.media_description();
+      std::vector<cricket::Codec> codecs = media->codecs();
+      std::vector<cricket::Codec> codecs_out;
+      for (cricket::Codec codec : codecs) {
         if (codec.name == "VP8") {
           ASSERT_TRUE(codec.HasFeedbackParam(cricket::FeedbackParam(
               cricket::kRtcpFbParamNack, cricket::kParamValueEmpty)));

@@ -14,7 +14,7 @@
 #include <utility>
 #include <vector>
 
-#include "api/transport/field_trial_based_config.h"
+#include "api/environment/environment.h"
 #include "media/base/media_engine.h"
 #include "media/sctp/sctp_transport_factory.h"
 #include "pc/media_factory.h"
@@ -62,8 +62,7 @@ rtc::Thread* MaybeWrapThread(rtc::Thread* signaling_thread,
 
 std::unique_ptr<SctpTransportFactoryInterface> MaybeCreateSctpFactory(
     std::unique_ptr<SctpTransportFactoryInterface> factory,
-    rtc::Thread* network_thread,
-    const FieldTrialsView& field_trials) {
+    rtc::Thread* network_thread) {
   if (factory) {
     return factory;
   }
@@ -78,24 +77,14 @@ std::unique_ptr<SctpTransportFactoryInterface> MaybeCreateSctpFactory(
 
 // Static
 rtc::scoped_refptr<ConnectionContext> ConnectionContext::Create(
+    const Environment& env,
     PeerConnectionFactoryDependencies* dependencies) {
-// TODO(bugs.webrtc.org/15574): Remove when call_factory and media_engine
-// are removed from PeerConnectionFactoryDependencies
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-  if (dependencies->media_factory != nullptr) {
-    RTC_CHECK(dependencies->media_engine == nullptr)
-        << "media_factory replaces media_engine. Do not set media_engine.";
-    RTC_CHECK(dependencies->call_factory == nullptr)
-        << "media_factory replaces call_factory. Do not set call_factory.";
-  }
-#pragma clang diagnostic pop
-
   return rtc::scoped_refptr<ConnectionContext>(
-      new ConnectionContext(dependencies));
+      new ConnectionContext(env, dependencies));
 }
 
 ConnectionContext::ConnectionContext(
+    const Environment& env,
     PeerConnectionFactoryDependencies* dependencies)
     : network_thread_(MaybeStartNetworkThread(dependencies->network_thread,
                                               owned_socket_factory_,
@@ -109,29 +98,20 @@ ConnectionContext::ConnectionContext(
                      }),
       signaling_thread_(MaybeWrapThread(dependencies->signaling_thread,
                                         wraps_current_thread_)),
-      trials_(dependencies->trials ? std::move(dependencies->trials)
-                                   : std::make_unique<FieldTrialBasedConfig>()),
+      env_(env),
       media_engine_(
           dependencies->media_factory != nullptr
-              ? dependencies->media_factory->CreateMediaEngine(*dependencies)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-              : std::move(dependencies->media_engine)),
-#pragma clang diagnostic pop
+              ? dependencies->media_factory->CreateMediaEngine(env_,
+                                                               *dependencies)
+              : nullptr),
       network_monitor_factory_(
           std::move(dependencies->network_monitor_factory)),
       default_network_manager_(std::move(dependencies->network_manager)),
-      call_factory_(dependencies->media_factory != nullptr
-                        ? std::move(dependencies->media_factory)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-                        : std::move(dependencies->call_factory)),
-#pragma clang diagnostic pop
+      call_factory_(std::move(dependencies->media_factory)),
       default_socket_factory_(std::move(dependencies->packet_socket_factory)),
       sctp_factory_(
           MaybeCreateSctpFactory(std::move(dependencies->sctp_factory),
-                                 network_thread(),
-                                 *trials_.get())),
+                                 network_thread())),
       use_rtx_(true) {
   RTC_DCHECK_RUN_ON(signaling_thread_);
   RTC_DCHECK(!(default_network_manager_ && network_monitor_factory_))
@@ -174,7 +154,7 @@ ConnectionContext::ConnectionContext(
     // If network_monitor_factory_ is non-null, it will be used to create a
     // network monitor while on the network thread.
     default_network_manager_ = std::make_unique<rtc::BasicNetworkManager>(
-        network_monitor_factory_.get(), socket_factory, &field_trials());
+        network_monitor_factory_.get(), socket_factory, &env_.field_trials());
   }
   if (!default_socket_factory_) {
     default_socket_factory_ =
