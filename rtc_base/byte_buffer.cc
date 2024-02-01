@@ -16,7 +16,7 @@ namespace rtc {
 
 ByteBufferWriter::ByteBufferWriter() : ByteBufferWriterT() {}
 
-ByteBufferWriter::ByteBufferWriter(const char* bytes, size_t len)
+ByteBufferWriter::ByteBufferWriter(const uint8_t* bytes, size_t len)
     : ByteBufferWriterT(bytes, len) {}
 
 ByteBufferReader::ByteBufferReader(rtc::ArrayView<const uint8_t> bytes) {
@@ -132,15 +132,19 @@ bool ByteBufferReader::ReadString(std::string* val, size_t len) {
   }
 }
 
+bool ByteBufferReader::ReadStringView(absl::string_view* val, size_t len) {
+  if (!val || len > Length())
+    return false;
+  *val = absl::string_view(reinterpret_cast<const char*>(bytes_ + start_), len);
+  start_ += len;
+  return true;
+}
+
 bool ByteBufferReader::ReadBytes(rtc::ArrayView<uint8_t> val) {
   if (val.size() == 0) {
     return true;
   }
   return ReadBytes(val.data(), val.size());
-}
-
-bool ByteBufferReader::ReadBytes(char* val, size_t len) {
-  return ReadBytes(reinterpret_cast<uint8_t*>(val), len);
 }
 
 // Private function supporting the other Read* functions.

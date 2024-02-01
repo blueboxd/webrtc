@@ -78,18 +78,9 @@ using cricket::SimulcastLayerList;
 using cricket::StreamParams;
 using cricket::TransportInfo;
 
-using cricket::LOCAL_PORT_TYPE;
-using cricket::PRFLX_PORT_TYPE;
-using cricket::RELAY_PORT_TYPE;
-using cricket::STUN_PORT_TYPE;
-
 namespace webrtc {
 
 namespace {
-
-// UMA metric names.
-const char kSimulcastNumberOfEncodings[] =
-    "WebRTC.PeerConnection.Simulcast.NumberOfSendEncodings";
 
 static const int REPORT_USAGE_PATTERN_DELAY_MS = 60000;
 
@@ -113,13 +104,7 @@ uint32_t ConvertIceTransportTypeToCandidateFilter(
 IceCandidatePairType GetIceCandidatePairCounter(
     const cricket::Candidate& local,
     const cricket::Candidate& remote) {
-  const auto& l = local.type();
-  const auto& r = remote.type();
-  const auto& host = LOCAL_PORT_TYPE;
-  const auto& srflx = STUN_PORT_TYPE;
-  const auto& relay = RELAY_PORT_TYPE;
-  const auto& prflx = PRFLX_PORT_TYPE;
-  if (l == host && r == host) {
+  if (local.is_local() && remote.is_local()) {
     bool local_hostname =
         !local.address().hostname().empty() && local.address().IsUnresolvedIP();
     bool remote_hostname = !remote.address().hostname().empty() &&
@@ -152,34 +137,41 @@ IceCandidatePairType GetIceCandidatePairCounter(
       }
     }
   }
-  if (l == host && r == srflx)
-    return kIceCandidatePairHostSrflx;
-  if (l == host && r == relay)
-    return kIceCandidatePairHostRelay;
-  if (l == host && r == prflx)
-    return kIceCandidatePairHostPrflx;
-  if (l == srflx && r == host)
-    return kIceCandidatePairSrflxHost;
-  if (l == srflx && r == srflx)
-    return kIceCandidatePairSrflxSrflx;
-  if (l == srflx && r == relay)
-    return kIceCandidatePairSrflxRelay;
-  if (l == srflx && r == prflx)
-    return kIceCandidatePairSrflxPrflx;
-  if (l == relay && r == host)
-    return kIceCandidatePairRelayHost;
-  if (l == relay && r == srflx)
-    return kIceCandidatePairRelaySrflx;
-  if (l == relay && r == relay)
-    return kIceCandidatePairRelayRelay;
-  if (l == relay && r == prflx)
-    return kIceCandidatePairRelayPrflx;
-  if (l == prflx && r == host)
-    return kIceCandidatePairPrflxHost;
-  if (l == prflx && r == srflx)
-    return kIceCandidatePairPrflxSrflx;
-  if (l == prflx && r == relay)
-    return kIceCandidatePairPrflxRelay;
+
+  if (local.is_local()) {
+    if (remote.is_stun())
+      return kIceCandidatePairHostSrflx;
+    if (remote.is_relay())
+      return kIceCandidatePairHostRelay;
+    if (remote.is_prflx())
+      return kIceCandidatePairHostPrflx;
+  } else if (local.is_stun()) {
+    if (remote.is_local())
+      return kIceCandidatePairSrflxHost;
+    if (remote.is_stun())
+      return kIceCandidatePairSrflxSrflx;
+    if (remote.is_relay())
+      return kIceCandidatePairSrflxRelay;
+    if (remote.is_prflx())
+      return kIceCandidatePairSrflxPrflx;
+  } else if (local.is_relay()) {
+    if (remote.is_local())
+      return kIceCandidatePairRelayHost;
+    if (remote.is_stun())
+      return kIceCandidatePairRelaySrflx;
+    if (remote.is_relay())
+      return kIceCandidatePairRelayRelay;
+    if (remote.is_prflx())
+      return kIceCandidatePairRelayPrflx;
+  } else if (local.is_prflx()) {
+    if (remote.is_local())
+      return kIceCandidatePairPrflxHost;
+    if (remote.is_stun())
+      return kIceCandidatePairPrflxSrflx;
+    if (remote.is_relay())
+      return kIceCandidatePairPrflxRelay;
+  }
+
   return kIceCandidatePairMax;
 }
 
@@ -1099,9 +1091,6 @@ PeerConnection::AddTransceiver(
                        ? cricket::MEDIA_TYPE_AUDIO
                        : cricket::MEDIA_TYPE_VIDEO));
   }
-
-  RTC_HISTOGRAM_COUNTS_LINEAR(kSimulcastNumberOfEncodings,
-                              init.send_encodings.size(), 0, 7, 8);
 
   size_t num_rids = absl::c_count_if(init.send_encodings,
                                      [](const RtpEncodingParameters& encoding) {
@@ -2083,10 +2072,8 @@ void PeerConnection::OnSelectedCandidatePairChanged(
     return;
   }
 
-  if (event.selected_candidate_pair.local_candidate().type() ==
-          LOCAL_PORT_TYPE &&
-      event.selected_candidate_pair.remote_candidate().type() ==
-          LOCAL_PORT_TYPE) {
+  if (event.selected_candidate_pair.local_candidate().is_local() &&
+      event.selected_candidate_pair.remote_candidate().is_local()) {
     NoteUsageEvent(UsageEvent::DIRECT_CONNECTION_SELECTED);
   }
 
@@ -2794,7 +2781,7 @@ void PeerConnection::ReportBestConnectionState(
 
       // Increment the counter for IceCandidatePairType.
       if (local.protocol() == cricket::TCP_PROTOCOL_NAME ||
-          (local.type() == RELAY_PORT_TYPE &&
+          (local.is_relay() &&
            local.relay_protocol() == cricket::TCP_PROTOCOL_NAME)) {
         RTC_HISTOGRAM_ENUMERATION("WebRTC.PeerConnection.CandidatePairType_TCP",
                                   GetIceCandidatePairCounter(local, remote),

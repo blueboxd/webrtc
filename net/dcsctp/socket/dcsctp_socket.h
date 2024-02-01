@@ -14,10 +14,10 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "absl/strings/string_view.h"
 #include "api/array_view.h"
-#include "api/sequence_checker.h"
 #include "net/dcsctp/packet/chunk/abort_chunk.h"
 #include "net/dcsctp/packet/chunk/chunk.h"
 #include "net/dcsctp/packet/chunk/cookie_ack_chunk.h"
@@ -91,6 +91,8 @@ class DcSctpSocket : public DcSctpSocketInterface {
   void Close() override;
   SendStatus Send(DcSctpMessage message,
                   const SendOptions& send_options) override;
+  std::vector<SendStatus> SendMany(rtc::ArrayView<DcSctpMessage> messages,
+                                   const SendOptions& send_options) override;
   ResetStreamsStatus ResetStreams(
       rtc::ArrayView<const StreamID> outgoing_streams) override;
   SocketState state() const override;
@@ -165,6 +167,9 @@ class DcSctpSocket : public DcSctpSocketInterface {
   void MaybeSendShutdownOnPacketReceived(const SctpPacket& packet);
   // If there are streams pending to be reset, send a request to reset them.
   void MaybeSendResetStreamsRequest();
+  // Performs internal processing shared between Send and SendMany.
+  SendStatus InternalSend(const DcSctpMessage& message,
+                          const SendOptions& send_options);
   // Sends a INIT chunk.
   void SendInit();
   // Sends a SHUTDOWN chunk.
@@ -265,7 +270,6 @@ class DcSctpSocket : public DcSctpSocketInterface {
 
   const std::string log_prefix_;
   const std::unique_ptr<PacketObserver> packet_observer_;
-  RTC_NO_UNIQUE_ADDRESS webrtc::SequenceChecker thread_checker_;
   Metrics metrics_;
   DcSctpOptions options_;
 

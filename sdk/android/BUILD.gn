@@ -708,6 +708,7 @@ if (current_os == "linux" || is_android) {
     # made public because we don't have a proper NDK yet. Header APIs here are not
     # considered public and are subject to change.
     visibility = [ "*" ]
+    allow_poison = [ "environment_construction" ]
 
     sources = [
       "src/jni/pc/add_ice_candidate_observer.cc",
@@ -774,6 +775,7 @@ if (current_os == "linux" || is_android) {
       "../../api:libjingle_peerconnection_api",
       "../../api:media_stream_interface",
       "../../api:rtc_event_log_output_file",
+      "../../api:rtc_stats_api",
       "../../api:rtp_parameters",
       "../../api:rtp_sender_interface",
       "../../api:turn_customizer",
@@ -787,6 +789,7 @@ if (current_os == "linux" || is_android) {
       "../../modules/audio_processing:api",
       "../../modules/utility",
       "../../pc:media_stream_observer",
+      "../../pc:peer_connection_factory",
       "../../pc:webrtc_sdp",
       "../../rtc_base:checks",
       "../../rtc_base:event_tracer",
@@ -799,6 +802,7 @@ if (current_os == "linux" || is_android) {
       "../../rtc_base:ssl",
       "../../rtc_base:stringutils",
       "../../rtc_base:threading",
+      "../../stats:rtc_stats",
       "../../system_wrappers:field_trial",
     ]
     absl_deps = [
@@ -828,7 +832,6 @@ if (current_os == "linux" || is_android) {
       ":generated_metrics_jni",
       ":native_api_jni",
       ":peerconnection_jni",
-      "../../pc:peerconnection",
       "../../rtc_base:stringutils",
       "../../system_wrappers:metrics",
     ]
@@ -1028,6 +1031,8 @@ if (current_os == "linux" || is_android) {
   # API for creating Java PeerConnectionFactory from C++ equivalents.
   rtc_library("native_api_peerconnection") {
     visibility = [ "*" ]
+    allow_poison = [ "environment_construction" ]
+
     sources = [
       "native_api/peerconnection/peer_connection_factory.cc",
       "native_api/peerconnection/peer_connection_factory.h",

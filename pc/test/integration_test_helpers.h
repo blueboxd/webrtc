@@ -649,8 +649,8 @@ class PeerConnectionIntegrationWrapper : public PeerConnectionObserver,
     auto received_stats = NewGetStats();
     auto rtp_stats =
         received_stats->GetStatsOfType<RTCInboundRtpStreamStats>()[0];
-    ASSERT_TRUE(rtp_stats->relative_packet_arrival_delay.is_defined());
-    ASSERT_TRUE(rtp_stats->packets_received.is_defined());
+    ASSERT_TRUE(rtp_stats->relative_packet_arrival_delay.has_value());
+    ASSERT_TRUE(rtp_stats->packets_received.has_value());
     rtp_stats_id_ = rtp_stats->id();
     audio_packets_stat_ = *rtp_stats->packets_received;
     audio_delay_stat_ = *rtp_stats->relative_packet_arrival_delay;
@@ -1115,7 +1115,7 @@ class PeerConnectionIntegrationWrapper : public PeerConnectionObserver,
     if (remote_async_dns_resolver_) {
       const auto& local_candidate = candidate->candidate();
       if (local_candidate.address().IsUnresolvedIP()) {
-        RTC_DCHECK(local_candidate.type() == cricket::LOCAL_PORT_TYPE);
+        RTC_DCHECK(local_candidate.is_local());
         const auto resolved_ip = mdns_responder_->GetMappedAddressForName(
             local_candidate.address().hostname());
         RTC_DCHECK(!resolved_ip.IsNil());

@@ -328,17 +328,6 @@ class BasicPortAllocatorTestBase : public ::testing::Test,
         });
   }
 
-  static int CountCandidates(const std::vector<Candidate>& candidates,
-                             absl::string_view type,
-                             absl::string_view proto,
-                             const SocketAddress& addr) {
-    return absl::c_count_if(
-        candidates, [type, proto, addr](const Candidate& c) {
-          return c.type() == type && c.protocol() == proto &&
-                 AddressMatch(c.address(), addr);
-        });
-  }
-
   // Find a candidate and return it.
   static bool FindCandidate(const std::vector<Candidate>& candidates,
                             absl::string_view type,
@@ -496,8 +485,8 @@ class BasicPortAllocatorTestBase : public ::testing::Test,
                            bool with_nat) {
     if (with_nat) {
       nat_server_.reset(new rtc::NATServer(
-          rtc::NAT_OPEN_CONE, vss_.get(), kNatUdpAddr, kNatTcpAddr, vss_.get(),
-          rtc::SocketAddress(kNatUdpAddr.ipaddr(), 0)));
+          rtc::NAT_OPEN_CONE, thread_, vss_.get(), kNatUdpAddr, kNatTcpAddr,
+          thread_, vss_.get(), rtc::SocketAddress(kNatUdpAddr.ipaddr(), 0)));
     } else {
       nat_socket_factory_ =
           std::make_unique<rtc::BasicPacketSocketFactory>(fss_.get());
@@ -1237,7 +1226,7 @@ TEST_F(BasicPortAllocatorTest, TestGetAllPortsPortRange) {
   int num_nonrelay_candidates = 0;
   for (const Candidate& candidate : candidates_) {
     // Check the port number for the UDP/STUN/TCP port objects.
-    if (candidate.type() != RELAY_PORT_TYPE) {
+    if (!candidate.is_relay()) {
       EXPECT_TRUE(CheckPort(candidate.address(), kMinPort, kMaxPort));
       ++num_nonrelay_candidates;
     }
@@ -1272,9 +1261,11 @@ TEST_F(BasicPortAllocatorTest, TestGetAllPortsNoAdapters) {
                            rtc::SocketAddress(kNatUdpAddr.ipaddr(), 0)));
   // Again, two TURN candidates, using UDP/TCP for the first hop to the TURN
   // server.
-  EXPECT_EQ(2,
-            CountCandidates(candidates_, "relay", "udp",
-                            rtc::SocketAddress(kTurnUdpExtAddr.ipaddr(), 0)));
+  rtc::SocketAddress addr(kTurnUdpExtAddr.ipaddr(), 0);
+  EXPECT_EQ(2, absl::c_count_if(candidates_, [&](const Candidate& c) {
+              return c.is_relay() && c.protocol() == "udp" &&
+                     AddressMatch(c.address(), addr);
+            }));
 }
 
 // Test that when enumeration is disabled, we should not have any ports when
@@ -1548,7 +1539,7 @@ TEST_F(BasicPortAllocatorTest, TestCandidateFilterWithRelayOnly) {
 
   EXPECT_EQ(1U, candidates_.size());
   EXPECT_EQ(1U, ports_.size());  // Only Relay port will be in ready state.
-  EXPECT_EQ(std::string(RELAY_PORT_TYPE), candidates_[0].type());
+  EXPECT_TRUE(candidates_[0].is_relay());
   EXPECT_EQ(
       candidates_[0].related_address(),
       rtc::EmptySocketAddressWithFamily(candidates_[0].address().family()));
@@ -1565,7 +1556,7 @@ TEST_F(BasicPortAllocatorTest, TestCandidateFilterWithHostOnly) {
   EXPECT_EQ(2U, candidates_.size());  // Host UDP/TCP candidates only.
   EXPECT_EQ(2U, ports_.size());       // UDP/TCP ports only.
   for (const Candidate& candidate : candidates_) {
-    EXPECT_EQ(std::string(LOCAL_PORT_TYPE), candidate.type());
+    EXPECT_TRUE(candidate.is_local());
   }
 }
 
@@ -1584,7 +1575,7 @@ TEST_F(BasicPortAllocatorTest, TestCandidateFilterWithReflexiveOnly) {
   // port with STUN candidate will be sent outside.
   EXPECT_EQ(1U, candidates_.size());  // Only STUN candidate.
   EXPECT_EQ(1U, ports_.size());       // Only UDP port will be in ready state.
-  EXPECT_EQ(std::string(STUN_PORT_TYPE), candidates_[0].type());
+  EXPECT_TRUE(candidates_[0].is_stun());
   EXPECT_EQ(
       candidates_[0].related_address(),
       rtc::EmptySocketAddressWithFamily(candidates_[0].address().family()));
@@ -1603,7 +1594,7 @@ TEST_F(BasicPortAllocatorTest, TestCandidateFilterWithReflexiveOnlyAndNoNAT) {
   EXPECT_EQ(2U, candidates_.size());  // Local UDP + TCP candidate.
   EXPECT_EQ(2U, ports_.size());  //  UDP and TCP ports will be in ready state.
   for (const Candidate& candidate : candidates_) {
-    EXPECT_EQ(std::string(LOCAL_PORT_TYPE), candidate.type());
+    EXPECT_TRUE(candidate.is_local());
   }
 }
 
@@ -2174,7 +2165,7 @@ TEST_F(BasicPortAllocatorTest, TestSetCandidateFilterAfterCandidatesGathered) {
   }
   for (const Candidate& candidate : candidates) {
     // Expect only relay candidates now that the filter is applied.
-    EXPECT_EQ(std::string(RELAY_PORT_TYPE), candidate.type());
+    EXPECT_TRUE(candidate.is_relay());
     // Expect that the raddr is emptied due to the CF_RELAY filter.
     EXPECT_EQ(candidate.related_address(),
               rtc::EmptySocketAddressWithFamily(candidate.address().family()));
@@ -2210,21 +2201,21 @@ TEST_F(BasicPortAllocatorTest,
   session_->SetCandidateFilter(CF_RELAY);
   ASSERT_EQ_SIMULATED_WAIT(1u, candidates_.size(), kDefaultAllocationTimeout,
                            fake_clock);
-  EXPECT_EQ(RELAY_PORT_TYPE, candidates_.back().type());
+  EXPECT_TRUE(candidates_.back().is_relay());
   EXPECT_EQ(1u, ports_.size());
 
   // Surface the srflx candidate previously gathered but not signaled.
   session_->SetCandidateFilter(CF_RELAY | CF_REFLEXIVE);
   ASSERT_EQ_SIMULATED_WAIT(2u, candidates_.size(), kDefaultAllocationTimeout,
                            fake_clock);
-  EXPECT_EQ(STUN_PORT_TYPE, candidates_.back().type());
+  EXPECT_TRUE(candidates_.back().is_stun());
   EXPECT_EQ(2u, ports_.size());
 
   // Surface the srflx candidate previously gathered but not signaled.
   session_->SetCandidateFilter(CF_ALL);
   ASSERT_EQ_SIMULATED_WAIT(3u, candidates_.size(), kDefaultAllocationTimeout,
                            fake_clock);
-  EXPECT_EQ(LOCAL_PORT_TYPE, candidates_.back().type());
+  EXPECT_TRUE(candidates_.back().is_local());
   EXPECT_EQ(2u, ports_.size());
 }
 
@@ -2260,21 +2251,21 @@ TEST_F(
   session_->SetCandidateFilter(CF_RELAY);
   EXPECT_EQ_SIMULATED_WAIT(1u, candidates_.size(), kDefaultAllocationTimeout,
                            fake_clock);
-  EXPECT_EQ(RELAY_PORT_TYPE, candidates_.back().type());
+  EXPECT_TRUE(candidates_.back().is_relay());
   EXPECT_EQ(1u, ports_.size());
 
   // Surface the srflx candidate previously gathered but not signaled.
   session_->SetCandidateFilter(CF_REFLEXIVE);
   EXPECT_EQ_SIMULATED_WAIT(2u, candidates_.size(), kDefaultAllocationTimeout,
                            fake_clock);
-  EXPECT_EQ(STUN_PORT_TYPE, candidates_.back().type());
+  EXPECT_TRUE(candidates_.back().is_stun());
   EXPECT_EQ(2u, ports_.size());
 
   // Surface the host candidate previously gathered but not signaled.
   session_->SetCandidateFilter(CF_HOST);
   EXPECT_EQ_SIMULATED_WAIT(3u, candidates_.size(), kDefaultAllocationTimeout,
                            fake_clock);
-  EXPECT_EQ(LOCAL_PORT_TYPE, candidates_.back().type());
+  EXPECT_TRUE(candidates_.back().is_local());
   // We use a shared socket and cricket::UDPPort handles the srflx candidate.
   EXPECT_EQ(2u, ports_.size());
 }
@@ -2390,24 +2381,6 @@ TEST_F(BasicPortAllocatorTest,
                                             expected_stun_keepalive_interval);
 }
 
-TEST_F(BasicPortAllocatorTest, IceRegatheringMetricsLoggedWhenNetworkChanges) {
-  // Only test local ports to simplify test.
-  ResetWithNoServersOrNat();
-  AddInterface(kClientAddr, "test_net0");
-  ASSERT_TRUE(CreateSession(ICE_CANDIDATE_COMPONENT_RTP));
-  session_->StartGettingPorts();
-  EXPECT_TRUE_SIMULATED_WAIT(candidate_allocation_done_,
-                             kDefaultAllocationTimeout, fake_clock);
-  candidate_allocation_done_ = false;
-  AddInterface(kClientAddr2, "test_net1");
-  EXPECT_TRUE_SIMULATED_WAIT(candidate_allocation_done_,
-                             kDefaultAllocationTimeout, fake_clock);
-  EXPECT_METRIC_EQ(1,
-                   webrtc::metrics::NumEvents(
-                       "WebRTC.PeerConnection.IceRegatheringReason",
-                       static_cast<int>(IceRegatheringReason::NETWORK_CHANGE)));
-}
-
 // Test that when an mDNS responder is present, the local address of a host
 // candidate is concealed by an mDNS hostname and the related address of a srflx
 // candidate is set to 0.0.0.0 or ::0.
@@ -2435,7 +2408,7 @@ TEST_F(BasicPortAllocatorTest, HostCandidateAddressIsReplacedByHostname) {
   for (const auto& candidate : candidates_) {
     const auto& raddr = candidate.related_address();
 
-    if (candidate.type() == LOCAL_PORT_TYPE) {
+    if (candidate.is_local()) {
       EXPECT_FALSE(candidate.address().hostname().empty());
       EXPECT_TRUE(raddr.IsNil());
       if (candidate.protocol() == UDP_PROTOCOL_NAME) {
@@ -2443,13 +2416,13 @@ TEST_F(BasicPortAllocatorTest, HostCandidateAddressIsReplacedByHostname) {
       } else {
         ++num_host_tcp_candidates;
       }
-    } else if (candidate.type() == STUN_PORT_TYPE) {
+    } else if (candidate.is_stun()) {
       // For a srflx candidate, the related address should be set to 0.0.0.0 or
       // ::0
       EXPECT_TRUE(IPIsAny(raddr.ipaddr()));
       EXPECT_EQ(raddr.port(), 0);
       ++num_srflx_candidates;
-    } else if (candidate.type() == RELAY_PORT_TYPE) {
+    } else if (candidate.is_relay()) {
       EXPECT_EQ(kNatUdpAddr.ipaddr(), raddr.ipaddr());
       EXPECT_EQ(kNatUdpAddr.family(), raddr.family());
       ++num_relay_candidates;

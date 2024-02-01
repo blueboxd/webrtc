@@ -19,25 +19,26 @@
 #include <vector>
 
 #include "absl/algorithm/container.h"
-#include "absl/strings/escaping.h"
-#include "absl/strings/match.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
 #include "api/array_view.h"
 #include "api/units/timestamp.h"
-#include "p2p/base/port_allocator.h"
+#include "p2p/base/p2p_constants.h"
+#include "rtc_base/byte_buffer.h"
 #include "rtc_base/checks.h"
-#include "rtc_base/crc32.h"
 #include "rtc_base/helpers.h"
 #include "rtc_base/logging.h"
-#include "rtc_base/mdns_responder_interface.h"
-#include "rtc_base/message_digest.h"
+#include "rtc_base/net_helper.h"
 #include "rtc_base/network.h"
+#include "rtc_base/network/sent_packet.h"
+#include "rtc_base/network_constants.h"
 #include "rtc_base/numerics/safe_minmax.h"
+#include "rtc_base/socket.h"
+#include "rtc_base/socket_address.h"
 #include "rtc_base/string_encode.h"
 #include "rtc_base/string_utils.h"
 #include "rtc_base/strings/string_builder.h"
-#include "rtc_base/third_party/base64/base64.h"
+#include "rtc_base/time_utils.h"
 
 namespace cricket {
 namespace {
@@ -74,17 +75,16 @@ inline bool TooLongWithoutResponse(
 
 // Helper methods for converting string values of log description fields to
 // enum.
-webrtc::IceCandidateType GetCandidateTypeByString(absl::string_view type) {
-  if (type == LOCAL_PORT_TYPE) {
+webrtc::IceCandidateType GetRtcEventLogCandidateType(const Candidate& c) {
+  if (c.is_local()) {
     return webrtc::IceCandidateType::kLocal;
-  } else if (type == STUN_PORT_TYPE) {
+  } else if (c.is_stun()) {
     return webrtc::IceCandidateType::kStun;
-  } else if (type == PRFLX_PORT_TYPE) {
+  } else if (c.is_prflx()) {
     return webrtc::IceCandidateType::kPrflx;
-  } else if (type == RELAY_PORT_TYPE) {
-    return webrtc::IceCandidateType::kRelay;
   }
-  return webrtc::IceCandidateType::kUnknown;
+  RTC_DCHECK(c.is_relay());
+  return webrtc::IceCandidateType::kRelay;
 }
 
 webrtc::IceCandidatePairProtocol GetProtocolByString(
@@ -213,7 +213,7 @@ int Connection::ConnectionRequest::resend_delay() {
   return CONNECTION_RESPONSE_TIMEOUT;
 }
 
-Connection::Connection(rtc::WeakPtr<Port> port,
+Connection::Connection(rtc::WeakPtr<PortInterface> port,
                        size_t index,
                        const Candidate& remote_candidate)
     : network_thread_(port->thread()),
@@ -590,10 +590,8 @@ void Connection::HandleStunBindingOrGoogPingRequest(IceMessage* msg) {
   // This connection should now be receiving.
   ReceivedPing(msg->transaction_id());
   if (field_trials_->extra_ice_ping && last_ping_response_received_ == 0) {
-    if (local_candidate().type() == RELAY_PORT_TYPE ||
-        local_candidate().type() == PRFLX_PORT_TYPE ||
-        remote_candidate().type() == RELAY_PORT_TYPE ||
-        remote_candidate().type() == PRFLX_PORT_TYPE) {
+    if (local_candidate().is_relay() || local_candidate().is_prflx() ||
+        remote_candidate().is_relay() || remote_candidate().is_prflx()) {
       const int64_t now = rtc::TimeMillis();
       if (last_ping_sent_ + kMinExtraPingDelayMs <= now) {
         RTC_LOG(LS_INFO) << ToString()
@@ -1367,16 +1365,13 @@ const webrtc::IceCandidatePairDescription& Connection::ToLogDescription() {
   const Candidate& local = local_candidate();
   const Candidate& remote = remote_candidate();
   const rtc::Network* network = port()->Network();
-  log_description_ = webrtc::IceCandidatePairDescription();
-  log_description_->local_candidate_type =
-      GetCandidateTypeByString(local.type());
+  log_description_ = webrtc::IceCandidatePairDescription(
+      GetRtcEventLogCandidateType(local), GetRtcEventLogCandidateType(remote));
   log_description_->local_relay_protocol =
       GetProtocolByString(local.relay_protocol());
   log_description_->local_network_type = ConvertNetworkType(network->type());
   log_description_->local_address_family =
       GetAddressFamilyByInt(local.address().family());
-  log_description_->remote_candidate_type =
-      GetCandidateTypeByString(remote.type());
   log_description_->remote_address_family =
       GetAddressFamilyByInt(remote.address().family());
   log_description_->candidate_pair_protocol =
@@ -1579,8 +1574,7 @@ void Connection::MaybeSetRemoteIceParametersAndGeneration(
 
 void Connection::MaybeUpdatePeerReflexiveCandidate(
     const Candidate& new_candidate) {
-  if (remote_candidate_.type() == PRFLX_PORT_TYPE &&
-      new_candidate.type() != PRFLX_PORT_TYPE &&
+  if (remote_candidate_.is_prflx() && !new_candidate.is_prflx() &&
       remote_candidate_.protocol() == new_candidate.protocol() &&
       remote_candidate_.address() == new_candidate.address() &&
       remote_candidate_.username() == new_candidate.username() &&
@@ -1787,7 +1781,7 @@ void Connection::ForgetLearnedState() {
   pings_since_last_response_.clear();
 }
 
-ProxyConnection::ProxyConnection(rtc::WeakPtr<Port> port,
+ProxyConnection::ProxyConnection(rtc::WeakPtr<PortInterface> port,
                                  size_t index,
                                  const Candidate& remote_candidate)
     : Connection(std::move(port), index, remote_candidate) {}

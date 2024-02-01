@@ -32,15 +32,13 @@ enum class IceCandidatePairConfigType {
   kNumValues,
 };
 
-// TODO(qingsi): Change the names of candidate types to "host", "srflx", "prflx"
-// and "relay" after the naming is spec-compliant in the signaling part
+// TODO(tommi): Change the names of candidate types to "host", "srflx" for
+// spec-compliance.
 enum class IceCandidateType {
-  kUnknown,
   kLocal,
   kStun,
   kPrflx,
   kRelay,
-  kNumValues,
 };
 
 enum class IceCandidatePairProtocol {
@@ -88,7 +86,8 @@ struct LoggedIceCandidatePairConfig {
 
 class IceCandidatePairDescription {
  public:
-  IceCandidatePairDescription();
+  IceCandidatePairDescription(IceCandidateType local_candidate_type,
+                              IceCandidateType remote_candidate_type);
   explicit IceCandidatePairDescription(
       const IceCandidatePairDescription& other);
 

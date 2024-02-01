@@ -426,7 +426,7 @@ TEST_F(StunPortTest, TestStunCandidateDiscardedWithMdnsObfuscationNotEnabled) {
   EXPECT_TRUE_SIMULATED_WAIT(done(), kTimeoutMs, fake_clock);
   ASSERT_EQ(1U, port()->Candidates().size());
   EXPECT_TRUE(kLocalAddr.EqualIPs(port()->Candidates()[0].address()));
-  EXPECT_EQ(port()->Candidates()[0].type(), cricket::LOCAL_PORT_TYPE);
+  EXPECT_TRUE(port()->Candidates()[0].is_local());
 }
 
 // Test that a stun candidate (srflx candidate) is generated whose address is
@@ -445,11 +445,11 @@ TEST_F(StunPortTest, TestStunCandidateGeneratedWithMdnsObfuscationEnabled) {
   // One of the generated candidates is a local candidate and the other is a
   // stun candidate.
   EXPECT_NE(port()->Candidates()[0].type(), port()->Candidates()[1].type());
-  if (port()->Candidates()[0].type() == cricket::LOCAL_PORT_TYPE) {
-    EXPECT_EQ(port()->Candidates()[1].type(), cricket::STUN_PORT_TYPE);
+  if (port()->Candidates()[0].is_local()) {
+    EXPECT_TRUE(port()->Candidates()[1].is_stun());
   } else {
-    EXPECT_EQ(port()->Candidates()[0].type(), cricket::STUN_PORT_TYPE);
-    EXPECT_EQ(port()->Candidates()[1].type(), cricket::LOCAL_PORT_TYPE);
+    EXPECT_TRUE(port()->Candidates()[0].is_stun());
+    EXPECT_TRUE(port()->Candidates()[1].is_local());
   }
 }
 

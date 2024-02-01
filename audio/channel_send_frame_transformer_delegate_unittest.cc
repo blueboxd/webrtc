@@ -15,11 +15,11 @@
 #include <vector>
 
 #include "absl/memory/memory.h"
+#include "api/test/mock_frame_transformer.h"
+#include "api/test/mock_transformable_audio_frame.h"
 #include "rtc_base/task_queue_for_test.h"
 #include "test/gmock.h"
 #include "test/gtest.h"
-#include "test/mock_frame_transformer.h"
-#include "test/mock_transformable_frame.h"
 
 namespace webrtc {
 namespace {
@@ -68,6 +68,7 @@ std::unique_ptr<TransformableAudioFrameInterface> CreateMockReceiverFrame(
   ON_CALL(*mock_frame, GetDirection)
       .WillByDefault(Return(TransformableFrameInterface::Direction::kReceiver));
   ON_CALL(*mock_frame, GetContributingSources).WillByDefault(Return(csrcs));
+  ON_CALL(*mock_frame, SequenceNumber).WillByDefault(Return(987654321));
   return mock_frame;
 }
 
@@ -78,7 +79,7 @@ std::unique_ptr<TransformableAudioFrameInterface> CreateFrame() {
   MockChannelSend mock_channel;
   rtc::scoped_refptr<ChannelSendFrameTransformerDelegate> delegate =
       rtc::make_ref_counted<ChannelSendFrameTransformerDelegate>(
-          mock_channel.callback(), mock_frame_transformer, &channel_queue);
+          mock_channel.callback(), mock_frame_transformer, channel_queue.Get());
 
   std::unique_ptr<TransformableFrameInterface> frame;
   ON_CALL(*mock_frame_transformer, Transform)
@@ -131,7 +132,7 @@ TEST(ChannelSendFrameTransformerDelegateTest,
   MockChannelSend mock_channel;
   rtc::scoped_refptr<ChannelSendFrameTransformerDelegate> delegate =
       rtc::make_ref_counted<ChannelSendFrameTransformerDelegate>(
-          mock_channel.callback(), mock_frame_transformer, &channel_queue);
+          mock_channel.callback(), mock_frame_transformer, channel_queue.Get());
   rtc::scoped_refptr<TransformedFrameCallback> callback;
   EXPECT_CALL(*mock_frame_transformer, RegisterTransformedFrameCallback)
       .WillOnce(SaveArg<0>(&callback));
@@ -160,7 +161,7 @@ TEST(ChannelSendFrameTransformerDelegateTest,
   MockChannelSend mock_channel;
   rtc::scoped_refptr<ChannelSendFrameTransformerDelegate> delegate =
       rtc::make_ref_counted<ChannelSendFrameTransformerDelegate>(
-          mock_channel.callback(), mock_frame_transformer, &channel_queue);
+          mock_channel.callback(), mock_frame_transformer, channel_queue.Get());
   rtc::scoped_refptr<TransformedFrameCallback> callback;
   EXPECT_CALL(*mock_frame_transformer, RegisterTransformedFrameCallback)
       .WillOnce(SaveArg<0>(&callback));
@@ -192,7 +193,7 @@ TEST(ChannelSendFrameTransformerDelegateTest,
   MockChannelSend mock_channel;
   rtc::scoped_refptr<ChannelSendFrameTransformerDelegate> delegate =
       rtc::make_ref_counted<ChannelSendFrameTransformerDelegate>(
-          mock_channel.callback(), mock_frame_transformer, &channel_queue);
+          mock_channel.callback(), mock_frame_transformer, channel_queue.Get());
 
   delegate->Reset();
   EXPECT_CALL(mock_channel, SendFrame).Times(0);
@@ -207,7 +208,7 @@ TEST(ChannelSendFrameTransformerDelegateTest, ShortCircuitingSkipsTransform) {
   MockChannelSend mock_channel;
   rtc::scoped_refptr<ChannelSendFrameTransformerDelegate> delegate =
       rtc::make_ref_counted<ChannelSendFrameTransformerDelegate>(
-          mock_channel.callback(), mock_frame_transformer, &channel_queue);
+          mock_channel.callback(), mock_frame_transformer, channel_queue.Get());
 
   delegate->StartShortCircuiting();
 
@@ -252,6 +253,7 @@ TEST(ChannelSendFrameTransformerDelegateTest, CloningReceiverFrameWithCsrcs) {
   ASSERT_NE(frame->GetContributingSources().size(), 0u);
   EXPECT_THAT(cloned_frame->GetContributingSources(),
               ElementsAreArray(frame->GetContributingSources()));
+  EXPECT_EQ(cloned_frame->SequenceNumber(), frame->SequenceNumber());
 }
 
 }  // namespace

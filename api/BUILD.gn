@@ -334,6 +334,7 @@ rtc_library("libjingle_peerconnection_api") {
     ":sequence_checker",
     ":turn_customizer",
     "../call:rtp_interfaces",
+    "../p2p:connection",
     "../p2p:rtc_p2p",
     "../pc:media_factory",
     "../rtc_base:copy_on_write_buffer",
@@ -508,6 +509,7 @@ rtc_library("rtp_parameters") {
     ":array_view",
     ":priority",
     ":rtp_transceiver_direction",
+    "../media:media_constants",
     "../rtc_base:checks",
     "../rtc_base:stringutils",
     "../rtc_base/system:rtc_export",
@@ -770,6 +772,7 @@ rtc_source_set("rtc_stats_api") {
   visibility = [ "*" ]
   cflags = []
   sources = [
+    "stats/attribute.h",
     "stats/rtc_stats.h",
     "stats/rtc_stats_collector_callback.h",
     "stats/rtc_stats_report.h",
@@ -787,7 +790,10 @@ rtc_source_set("rtc_stats_api") {
     "units:timestamp",
   ]
 
-  absl_deps = [ "//third_party/abseil-cpp/absl/types:optional" ]
+  absl_deps = [
+    "//third_party/abseil-cpp/absl/types:optional",
+    "//third_party/abseil-cpp/absl/types:variant",
+  ]
 }
 
 rtc_library("audio_options_api") {
@@ -889,6 +895,7 @@ rtc_source_set("fec_controller_api") {
 
   deps = [
     "../modules:module_fec_api",
+    "environment",
     "video:video_frame_type",
   ]
 }
@@ -929,6 +936,10 @@ rtc_library("ice_transport_factory") {
     ":make_ref_counted",
     ":packet_socket_factory",
     ":scoped_refptr",
+    "../p2p:connection",
+    "../p2p:ice_transport_internal",
+    "../p2p:p2p_constants",
+    "../p2p:p2p_transport_channel",
     "../p2p:rtc_p2p",
     "../rtc_base:threading",
     "../rtc_base/system:rtc_export",
@@ -1140,6 +1151,16 @@ if (rtc_include_tests) {
     ]
   }
 
+  rtc_library("mock_frame_transformer") {
+    visibility = [ "*" ]
+    testonly = true
+    sources = [ "test/mock_frame_transformer.h" ]
+    deps = [
+      ":frame_transformer_interface",
+      "../test:test_support",
+    ]
+  }
+
   rtc_library("mock_encoder_selector") {
     visibility = [ "*" ]
     testonly = true
@@ -1338,6 +1359,7 @@ if (rtc_include_tests) {
     deps = [
       "../api/video_codecs:video_codecs_api",
       "../test:test_support",
+      "environment",
     ]
   }
 
