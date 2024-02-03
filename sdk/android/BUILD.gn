@@ -109,6 +109,7 @@ if (is_android) {
     visibility = [ "*" ]
     allow_poison = [
       "audio_codecs",  # TODO(bugs.webrtc.org/8396): Remove.
+      "environment_construction",
       "software_video_codecs",  # TODO(bugs.webrtc.org/7925): Remove.
     ]
     public_deps = [  # no-presubmit-check TODO(webrtc:8603)
@@ -768,8 +769,8 @@ if (current_os == "linux" || is_android) {
       ":native_api_jni",
       ":native_api_stacktrace",
       "..:media_constraints",
-      "../../api:callfactory_api",
       "../../api:dtmf_sender_interface",
+      "../../api:enable_media",
       "../../api:libjingle_peerconnection_api",
       "../../api:media_stream_interface",
       "../../api:rtc_event_log_output_file",
@@ -781,7 +782,6 @@ if (current_os == "linux" || is_android) {
       "../../api/task_queue:default_task_queue_factory",
       "../../api/video_codecs:video_codecs_api",
       "../../call:call_interfaces",
-      "../../media:rtc_audio_video",
       "../../media:rtc_media_base",
       "../../modules/audio_device",
       "../../modules/audio_processing:api",
@@ -822,6 +822,7 @@ if (current_os == "linux" || is_android) {
   rtc_library("libjingle_peerconnection_metrics_default_jni") {
     visibility = [ "*" ]
     sources = [ "src/jni/android_metrics.cc" ]
+    allow_poison = [ "environment_construction" ]
     deps = [
       ":base_jni",
       ":generated_metrics_jni",
@@ -1632,6 +1633,7 @@ if (is_android) {
       ":native_test_jni_onload",
       ":opensles_audio_device_module",
       ":video_jni",
+      "../../api:enable_media_with_defaults",
       "../../api:field_trials_view",
       "../../api:scoped_refptr",
       "../../api/rtc_event_log:rtc_event_log_factory",
@@ -1642,7 +1644,6 @@ if (is_android) {
       "../../media:rtc_audio_video",
       "../../media:rtc_internal_video_codecs",
       "../../media:rtc_media_base",
-      "../../media:rtc_media_engine_defaults",
       "../../modules/audio_device",
       "../../modules/audio_device:mock_audio_device",
       "../../modules/audio_processing:api",
@@ -1721,6 +1722,7 @@ if (is_android) {
       "tests/src/org/webrtc/HardwareVideoEncoderTest.java",
       "tests/src/org/webrtc/IceCandidateTest.java",
       "tests/src/org/webrtc/RefCountDelegateTest.java",
+      "tests/src/org/webrtc/RenderSynchronizerTest.java",
       "tests/src/org/webrtc/ScalingSettingsTest.java",
       "tests/src/org/webrtc/audio/LowLatencyAudioBufferManagerTest.java",
     ]
