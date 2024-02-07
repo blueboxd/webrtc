@@ -42,8 +42,8 @@
 #include "rtc_base/buffer.h"
 #include "rtc_base/checks.h"
 #include "rtc_base/time_utils.h"
-#include "system_wrappers/include/field_trial.h"
 #include "system_wrappers/include/ntp_time.h"
+#include "test/gmock.h"
 #include "test/gtest.h"
 
 namespace webrtc {
@@ -51,6 +51,9 @@ namespace webrtc {
 namespace test {
 
 namespace {
+
+using ::testing::ElementsAreArray;
+using ::testing::IsEmpty;
 
 struct ExtensionPair {
   RTPExtensionType type;
@@ -221,10 +224,10 @@ constexpr uint32_t CandidateTypeCount() {
   // This switch statement only exists to catch changes to the IceCandidateType
   // enumeration. If you get an error here, please update the switch statement
   // and the return value.
-  IceCandidateType type = IceCandidateType::kLocal;
+  IceCandidateType type = IceCandidateType::kHost;
   switch (type) {
-    case IceCandidateType::kLocal:
-    case IceCandidateType::kStun:
+    case IceCandidateType::kHost:
+    case IceCandidateType::kSrflx:
     case IceCandidateType::kPrflx:
     case IceCandidateType::kRelay:
       break;
@@ -234,7 +237,7 @@ constexpr uint32_t CandidateTypeCount() {
 
 std::unique_ptr<RtcEventIceCandidatePairConfig>
 EventGenerator::NewIceCandidatePairConfig() {
-  static_assert(static_cast<int>(IceCandidateType::kLocal) == 0,
+  static_assert(static_cast<int>(IceCandidateType::kHost) == 0,
                 "Expect kLocal to be the first enum value, equal to 0");
   IceCandidateType local_candidate_type =
       static_cast<IceCandidateType>(prng_.Rand(CandidateTypeCount() - 1));
@@ -1047,23 +1050,15 @@ void VerifyLoggedRtpHeader(const Event& original_header,
 }
 
 template <typename Event>
-void VerifyLoggedDependencyDescriptor(const Event& packet,
-                                      const std::vector<uint8_t>& logged_dd) {
-  if (webrtc::field_trial::IsDisabled(
-          "WebRTC-RtcEventLogEncodeDependencyDescriptor")) {
-    EXPECT_TRUE(logged_dd.empty());
-  } else {
+void EventVerifier::VerifyLoggedDependencyDescriptor(
+    const Event& packet,
+    const std::vector<uint8_t>& logged_dd) const {
+  if (expect_dependency_descriptor_rtp_header_extension_is_set_) {
     rtc::ArrayView<const uint8_t> original =
         packet.template GetRawExtension<RtpDependencyDescriptorExtension>();
-    EXPECT_EQ(logged_dd.size(), original.size());
-    bool dd_is_same = true;
-    for (size_t i = 0; i < logged_dd.size(); ++i) {
-      dd_is_same = logged_dd[i] == original[i];
-      if (!dd_is_same) {
-        break;
-      }
-    }
-    EXPECT_TRUE(dd_is_same);
+    EXPECT_THAT(logged_dd, ElementsAreArray(original));
+  } else {
+    EXPECT_THAT(logged_dd, IsEmpty());
   }
 }
 
