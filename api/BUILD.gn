@@ -274,7 +274,6 @@ rtc_library("libjingle_peerconnection_api") {
   visibility = [ "*" ]
   cflags = []
   sources = [
-    "crypto_params.h",
     "data_channel_interface.cc",
     "data_channel_interface.h",
     "jsep.cc",
@@ -355,6 +354,7 @@ rtc_library("libjingle_peerconnection_api") {
     "neteq:neteq_api",
     "rtc_event_log",
     "task_queue",
+    "transport:bandwidth_estimation_settings",
     "transport:bitrate_settings",
     "transport:enums",
     "transport:network_control",

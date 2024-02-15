@@ -1681,6 +1681,15 @@ RTCError PeerConnection::SetBitrate(const BitrateSettings& bitrate) {
   return RTCError::OK();
 }
 
+void PeerConnection::ReconfigureBandwidthEstimation(
+    const BandwidthEstimationSettings& settings) {
+  worker_thread()->PostTask(SafeTask(worker_thread_safety_, [this, settings]() {
+    RTC_DCHECK_RUN_ON(worker_thread());
+    call_->GetTransportControllerSend()->ReconfigureBandwidthEstimation(
+        settings);
+  }));
+}
+
 void PeerConnection::SetAudioPlayout(bool playout) {
   if (!worker_thread()->IsCurrent()) {
     worker_thread()->BlockingCall(
@@ -2693,9 +2702,7 @@ void PeerConnection::ReportRemoteIceCandidateAdded(
 
 bool PeerConnection::SrtpRequired() const {
   RTC_DCHECK_RUN_ON(signaling_thread());
-  return (dtls_enabled_ ||
-          sdp_handler_->webrtc_session_desc_factory()->SdesPolicy() ==
-              cricket::SEC_REQUIRED);
+  return dtls_enabled_;
 }
 
 void PeerConnection::OnTransportControllerGatheringState(
