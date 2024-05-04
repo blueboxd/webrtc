@@ -46,6 +46,10 @@ struct StreamsConfig {
   ~StreamsConfig();
   Timestamp at_time = Timestamp::PlusInfinity();
   absl::optional<bool> requests_alr_probing;
+  // If `initial_probe_to_max_bitrate` is set to true, the first probe
+  // may probe up to the max configured bitrate and can ignore
+  // max_total_allocated_bitrate.
+  absl::optional<bool> initial_probe_to_max_bitrate;
   absl::optional<double> pacing_factor;
 
   // TODO(srte): Use BitrateAllocationLimits here.
@@ -170,9 +174,7 @@ struct TransportPacketsFeedback {
   ~TransportPacketsFeedback();
 
   Timestamp feedback_time = Timestamp::PlusInfinity();
-  Timestamp first_unacked_send_time = Timestamp::PlusInfinity();
   DataSize data_in_flight = DataSize::Zero();
-  DataSize prior_in_flight = DataSize::Zero();
   std::vector<PacketResult> packet_feedbacks;
 
   // Arrival times for messages without send time information.

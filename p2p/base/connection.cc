@@ -43,6 +43,8 @@
 namespace cricket {
 namespace {
 
+using webrtc::IceCandidateType;
+
 // Determines whether we have seen at least the given maximum number of
 // pings fail to have a response.
 inline bool TooManyFailures(
@@ -75,16 +77,16 @@ inline bool TooLongWithoutResponse(
 
 // Helper methods for converting string values of log description fields to
 // enum.
-webrtc::IceCandidateType GetRtcEventLogCandidateType(const Candidate& c) {
+IceCandidateType GetRtcEventLogCandidateType(const Candidate& c) {
   if (c.is_local()) {
-    return webrtc::IceCandidateType::kHost;
+    return IceCandidateType::kHost;
   } else if (c.is_stun()) {
-    return webrtc::IceCandidateType::kSrflx;
+    return IceCandidateType::kSrflx;
   } else if (c.is_prflx()) {
-    return webrtc::IceCandidateType::kPrflx;
+    return IceCandidateType::kPrflx;
   }
   RTC_DCHECK(c.is_relay());
-  return webrtc::IceCandidateType::kRelay;
+  return IceCandidateType::kRelay;
 }
 
 webrtc::IceCandidatePairProtocol GetProtocolByString(
@@ -1330,11 +1332,11 @@ std::string Connection::ToString() const {
   const Candidate& local = local_candidate();
   const Candidate& remote = remote_candidate();
   ss << local.id() << ":" << local.component() << ":" << local.generation()
-     << ":" << local.type() << ":" << local.protocol() << ":"
+     << ":" << local.type_name() << ":" << local.protocol() << ":"
      << local.address().ToSensitiveString() << "->" << remote.id() << ":"
-     << remote.component() << ":" << remote.priority() << ":" << remote.type()
-     << ":" << remote.protocol() << ":" << remote.address().ToSensitiveString()
-     << "|";
+     << remote.component() << ":" << remote.priority() << ":"
+     << remote.type_name() << ":" << remote.protocol() << ":"
+     << remote.address().ToSensitiveString() << "|";
 
   ss << CONNECT_STATE_ABBREV[connected_] << RECEIVE_STATE_ABBREV[receiving_]
      << WRITE_STATE_ABBREV[write_state_] << ICESTATE[static_cast<int>(state_)]
@@ -1689,17 +1691,15 @@ void Connection::MaybeUpdateLocalCandidate(StunRequest* request,
     return;
   }
   const uint32_t priority = priority_attr->value();
-  std::string id = rtc::CreateRandomString(8);
 
   // Create a peer-reflexive candidate based on the local candidate.
-  local_candidate_.set_id(id);
-  local_candidate_.set_type(PRFLX_PORT_TYPE);
+  local_candidate_.generate_id();
+  local_candidate_.set_type(IceCandidateType::kPrflx);
   // Set the related address and foundation attributes before changing the
   // address.
   local_candidate_.set_related_address(local_candidate_.address());
-  local_candidate_.set_foundation(port()->ComputeFoundation(
-      PRFLX_PORT_TYPE, local_candidate_.protocol(),
-      local_candidate_.relay_protocol(), local_candidate_.address()));
+  local_candidate_.ComputeFoundation(local_candidate_.address(),
+                                     port_->IceTiebreaker());
   local_candidate_.set_priority(priority);
   local_candidate_.set_address(addr->GetAddress());
 

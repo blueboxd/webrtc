@@ -1120,16 +1120,16 @@ bool ParseCandidate(absl::string_view message,
       return ParseFailed(first_line, "Unsupported transport type.", error);
   }
 
-  std::string candidate_type;
+  IceCandidateType candidate_type;
   const absl::string_view type = fields[7];
   if (type == kCandidateHost) {
-    candidate_type = cricket::LOCAL_PORT_TYPE;
+    candidate_type = IceCandidateType::kHost;
   } else if (type == kCandidateSrflx) {
-    candidate_type = cricket::STUN_PORT_TYPE;
+    candidate_type = IceCandidateType::kSrflx;
   } else if (type == kCandidateRelay) {
-    candidate_type = cricket::RELAY_PORT_TYPE;
+    candidate_type = IceCandidateType::kRelay;
   } else if (type == kCandidatePrflx) {
-    candidate_type = cricket::PRFLX_PORT_TYPE;
+    candidate_type = IceCandidateType::kPrflx;
   } else {
     return ParseFailed(first_line, "Unsupported candidate type.", error);
   }
@@ -2341,6 +2341,7 @@ static bool ParseMsidAttribute(absl::string_view line,
   // Note that JSEP stipulates not sending msid-appdata so
   // a=msid:<stream id> <track id>
   // is supported for backward compability reasons only.
+  // RFC 8830 section 2 states that duplicate a=msid:stream track is illegal.
   std::vector<std::string> fields;
   size_t num_fields = rtc::tokenize(line.substr(kLinePrefixLength),
                                     kSdpDelimiterSpaceChar, &fields);
@@ -2670,6 +2671,21 @@ static std::unique_ptr<MediaContentDescription> ParseContentDescription(
   return media_desc;
 }
 
+bool HasDuplicateMsidLines(cricket::SessionDescription* desc) {
+  std::set<std::pair<std::string, std::string>> seen_msids;
+  for (const cricket::ContentInfo& content : desc->contents()) {
+    for (const cricket::StreamParams& stream :
+         content.media_description()->streams()) {
+      auto msid = std::pair(stream.first_stream_id(), stream.id);
+      if (seen_msids.find(msid) != seen_msids.end()) {
+        return true;
+      }
+      seen_msids.insert(std::move(msid));
+    }
+  }
+  return false;
+}
+
 bool ParseMediaDescription(
     absl::string_view message,
     const TransportDescription& session_td,
@@ -2851,6 +2867,11 @@ bool ParseMediaDescription(
                      content_rejected, bundle_only, std::move(content));
     // Create TransportInfo with the media level "ice-pwd" and "ice-ufrag".
     desc->AddTransportInfo(TransportInfo(content_name, transport));
+  }
+  // Apply whole-description sanity checks
+  if (HasDuplicateMsidLines(desc)) {
+    ParseFailed(message, *pos, "Duplicate a=msid lines detected", error);
+    return false;
   }
 
   desc->set_msid_signaling(msid_signaling);
@@ -3612,7 +3633,7 @@ bool ParseRtpmapAttribute(absl::string_view line,
   }
 
   if (media_type == cricket::MEDIA_TYPE_VIDEO) {
-    for (const cricket::VideoCodec& existing_codec : media_desc->codecs()) {
+    for (const cricket::Codec& existing_codec : media_desc->codecs()) {
       if (!existing_codec.name.empty() && payload_type == existing_codec.id &&
           (!absl::EqualsIgnoreCase(encoding_name, existing_codec.name) ||
            clock_rate != existing_codec.clockrate)) {
@@ -3643,7 +3664,7 @@ bool ParseRtpmapAttribute(absl::string_view line,
       return ParseFailed(line, "At most 24 channels are supported.", error);
     }
 
-    for (const cricket::AudioCodec& existing_codec : media_desc->codecs()) {
+    for (const cricket::Codec& existing_codec : media_desc->codecs()) {
       // TODO(crbug.com/1338902) re-add checks for clockrate and number of
       // channels.
       if (!existing_codec.name.empty() && payload_type == existing_codec.id &&

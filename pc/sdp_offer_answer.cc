@@ -3576,10 +3576,9 @@ RTCError SdpOfferAnswerHandler::ValidateSessionDescription(
     return error;
   }
 
-  // TODO(crbug.com/1459124): remove killswitch after rollout.
+  // Validate the SSRC groups.
   error = ValidateSsrcGroups(*sdesc->description());
-  if (!error.ok() &&
-      !pc_->trials().IsDisabled("WebRTC-PreventSsrcGroupsWithUnexpectedSize")) {
+  if (!error.ok()) {
     return error;
   }
 
@@ -4297,11 +4296,13 @@ void SdpOfferAnswerHandler::GetOptionsForUnifiedPlanOffer(
             GetMediaDescriptionOptionsForRejectedData(mid));
       } else {
         const auto data_mid = pc_->sctp_mid();
-        RTC_CHECK(data_mid);
-        if (mid == data_mid.value()) {
+        if (data_mid.has_value() && mid == data_mid.value()) {
           session_options->media_description_options.push_back(
               GetMediaDescriptionOptionsForActiveData(mid));
         } else {
+          if (!data_mid.has_value()) {
+            RTC_LOG(LS_ERROR) << "Datachannel transport not available: " << mid;
+          }
           session_options->media_description_options.push_back(
               GetMediaDescriptionOptionsForRejectedData(mid));
         }

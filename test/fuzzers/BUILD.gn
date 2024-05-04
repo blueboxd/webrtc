@@ -222,6 +222,7 @@ webrtc_fuzzer_test("rtcp_receiver_fuzzer") {
     "../../modules/rtp_rtcp:rtp_rtcp_format",
     "../../rtc_base:checks",
     "../../system_wrappers",
+    "../../system_wrappers:field_trial",
   ]
   seed_corpus = "corpora/rtcp-corpus"
 }
@@ -385,7 +386,6 @@ webrtc_fuzzer_test("turn_unwrap_fuzzer") {
   sources = [ "turn_unwrap_fuzzer.cc" ]
   deps = [
     "../../media",
-    "../../media:rtc_media_base",
     "../../media:turn_utils",
   ]
 }
@@ -491,8 +491,8 @@ rtc_library("audio_processing_fuzzer_helper") {
   deps = [
     ":fuzz_data_helper",
     "../../api/audio:audio_frame_api",
+    "../../api/audio:audio_processing",
     "../../modules/audio_processing",
-    "../../modules/audio_processing:api",
     "../../modules/audio_processing:audio_frame_proxies",
     "../../rtc_base:checks",
   ]
@@ -505,11 +505,11 @@ webrtc_fuzzer_test("audio_processing_fuzzer") {
     ":audio_processing_fuzzer_helper",
     "../../api:scoped_refptr",
     "../../api/audio:aec3_factory",
+    "../../api/audio:audio_processing",
     "../../api/audio:echo_detector_creator",
     "../../api/task_queue",
     "../../api/task_queue:default_task_queue_factory",
     "../../modules/audio_processing",
-    "../../modules/audio_processing:api",
     "../../modules/audio_processing:audio_buffer",
     "../../modules/audio_processing:audioproc_test_utils",
     "../../modules/audio_processing/aec3",
@@ -531,8 +531,8 @@ webrtc_fuzzer_test("audio_processing_sample_rate_fuzzer") {
   deps = [
     "../../api:scoped_refptr",
     "../../api/audio:audio_frame_api",
+    "../../api/audio:audio_processing",
     "../../modules/audio_processing",
-    "../../modules/audio_processing:api",
     "../../modules/audio_processing:audio_frame_proxies",
     "../../modules/audio_processing:audioproc_test_utils",
     "../../rtc_base:checks",
@@ -545,8 +545,8 @@ webrtc_fuzzer_test("agc_fuzzer") {
   sources = [ "agc_fuzzer.cc" ]
   deps = [
     ":fuzz_data_helper",
+    "../../api/audio:audio_processing",
     "../../modules/audio_processing",
-    "../../modules/audio_processing:api",
     "../../modules/audio_processing:audio_buffer",
     "../../rtc_base:macromagic",
     "../../rtc_base:safe_minmax",
@@ -576,7 +576,7 @@ webrtc_fuzzer_test("aec3_fuzzer") {
   sources = [ "aec3_fuzzer.cc" ]
   deps = [
     ":fuzz_data_helper",
-    "../../modules/audio_processing:api",
+    "../../api/audio:audio_processing",
     "../../modules/audio_processing:audio_buffer",
     "../../modules/audio_processing/aec3",
   ]
@@ -706,6 +706,7 @@ if (rtc_build_libvpx) {
       "..:test_support",
       "../../api:array_view",
       "../../api:field_trials_view",
+      "../../api/environment:environment_factory",
       "../../api/video:video_frame",
       "../../api/video_codecs:video_codecs_api",
       "../../media:media_constants",

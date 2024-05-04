@@ -11,8 +11,8 @@
 
 #include <utility>
 
-#include "call/simulated_network.h"
 #include "rtc_base/checks.h"
+#include "test/network/simulated_network.h"
 
 namespace webrtc {
 
@@ -71,7 +71,7 @@ NetworkEmulationManager::SimulatedNetworkNode::Builder::capacity_Mbps(
 
 NetworkEmulationManager::SimulatedNetworkNode::Builder&
 NetworkEmulationManager::SimulatedNetworkNode::Builder::loss(double loss_rate) {
-  config_.loss_percent = std::round(loss_rate * 100);
+  config_.loss_percent = loss_rate * 100;
   return *this;
 }
 

@@ -42,6 +42,7 @@ struct ProbeControllerConfig {
   FieldTrialOptional<double> second_exponential_probe_scale;
   FieldTrialParameter<double> further_exponential_probe_scale;
   FieldTrialParameter<double> further_probe_threshold;
+  FieldTrialParameter<bool> abort_further_probe_if_max_lower_than_current;
 
   // Configures how often we send ALR probes and how big they are.
   FieldTrialParameter<TimeDelta> alr_probing_interval;
@@ -64,8 +65,7 @@ struct ProbeControllerConfig {
   FieldTrialParameter<bool> probe_on_max_allocated_bitrate_change;
   FieldTrialOptional<double> first_allocation_probe_scale;
   FieldTrialOptional<double> second_allocation_probe_scale;
-  FieldTrialFlag allocation_allow_further_probing;
-  FieldTrialParameter<DataRate> allocation_probe_max;
+  FieldTrialOptional<double> allocation_probe_limit_by_current_scale;
 
   // The minimum number probing packets used.
   FieldTrialParameter<int> min_probe_packets_sent;
@@ -121,6 +121,9 @@ class ProbeController {
       Timestamp at_time);
 
   void EnablePeriodicAlrProbing(bool enable);
+  // The first initial probe ignores allocated bitrate constraints and probe up
+  // to max configured bitrate configured via SetBitrates.
+  void SetFirstProbeToMaxBitrate(bool first_probe_to_max_bitrate);
 
   void SetAlrStartTimeMs(absl::optional<int64_t> alr_start_time);
   void SetAlrEndedTimeMs(int64_t alr_end_time);
@@ -148,6 +151,7 @@ class ProbeController {
     kProbingComplete,
   };
 
+  void UpdateState(State new_state);
   ABSL_MUST_USE_RESULT std::vector<ProbeClusterConfig>
   InitiateExponentialProbing(Timestamp at_time);
   ABSL_MUST_USE_RESULT std::vector<ProbeClusterConfig> InitiateProbing(
@@ -158,6 +162,8 @@ class ProbeController {
   bool TimeForNetworkStateProbe(Timestamp at_time) const;
 
   bool network_available_;
+  bool waiting_for_initial_probe_result_ = false;
+  bool first_probe_to_max_bitrate_ = false;
   BandwidthLimitedCause bandwidth_limited_cause_ =
       BandwidthLimitedCause::kDelayBasedLimited;
   State state_;

@@ -13,7 +13,9 @@
 #include <vector>
 
 #include "absl/strings/str_replace.h"
+#include "api/audio/audio_device.h"
 #include "api/audio/audio_mixer.h"
+#include "api/audio/audio_processing.h"
 #include "api/audio_codecs/builtin_audio_decoder_factory.h"
 #include "api/audio_codecs/builtin_audio_encoder_factory.h"
 #include "api/create_peerconnection_factory.h"
@@ -31,8 +33,6 @@
 #include "api/video_codecs/video_encoder_factory_template_libvpx_vp8_adapter.h"
 #include "api/video_codecs/video_encoder_factory_template_libvpx_vp9_adapter.h"
 #include "api/video_codecs/video_encoder_factory_template_open_h264_adapter.h"
-#include "modules/audio_device/include/audio_device.h"
-#include "modules/audio_processing/include/audio_processing.h"
 #include "p2p/base/port_allocator.h"
 #include "pc/peer_connection_wrapper.h"
 #include "pc/session_description.h"
@@ -1213,6 +1213,33 @@ TEST_F(SdpOfferAnswerTest,
   auto answer = pc->CreateAnswer();
   EXPECT_EQ(answer->description()->msid_signaling(),
             cricket::kMsidSignalingNotUsed);
+}
+
+TEST_F(SdpOfferAnswerTest, OfferWithRejectedMlineWithoutFingerprintIsAccepted) {
+  auto pc = CreatePeerConnection();
+  // A rejected m-line without fingerprint.
+  // The answer does not require one.
+  std::string sdp =
+      "v=0\r\n"
+      "o=- 0 3 IN IP4 127.0.0.1\r\n"
+      "s=-\r\n"
+      "t=0 0\r\n"
+      "a=setup:actpass\r\n"
+      "a=ice-ufrag:ETEn\r\n"
+      "a=ice-pwd:OtSK0WpNtpUjkY4+86js7Z/l\r\n"
+      "m=audio 0 RTP/SAVPF 111\r\n"
+      "c=IN IP4 0.0.0.0\r\n"
+      "a=sendrecv\r\n"
+      "a=rtpmap:111 opus/48000/2\r\n"
+      "a=rtcp-mux\r\n";
+  auto desc = CreateSessionDescription(SdpType::kOffer, sdp);
+  ASSERT_NE(desc, nullptr);
+  RTCError error;
+  pc->SetRemoteDescription(std::move(desc), &error);
+  EXPECT_TRUE(error.ok());
+
+  auto answer = pc->CreateAnswer();
+  EXPECT_TRUE(pc->SetLocalDescription(std::move(answer)));
 }
 
 }  // namespace webrtc

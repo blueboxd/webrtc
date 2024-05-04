@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "absl/types/optional.h"
+#include "api/environment/environment.h"
 #include "api/numerics/samples_stats_counter.h"
 #include "api/test/metrics/metric.h"
 #include "api/test/metrics/metrics_logger.h"
@@ -48,8 +49,10 @@ class VideoCodecTester {
   };
 
   struct EncodingSettings {
-    SdpVideoFormat sdp_video_format = SdpVideoFormat("VP8");
+    SdpVideoFormat sdp_video_format = SdpVideoFormat::VP8();
     ScalabilityMode scalability_mode = ScalabilityMode::kL1T1;
+    VideoCodecMode content_type = VideoCodecMode::kRealtimeVideo;
+    bool frame_drop = true;
 
     struct LayerSettings {
       Resolution resolution;
@@ -195,7 +198,9 @@ class VideoCodecTester {
       std::vector<int> bitrates_kbps,
       double framerate_fps,
       int num_frames,
-      uint32_t first_timestamp_rtp = 90000);
+      uint32_t first_timestamp_rtp = 90000,
+      VideoCodecMode content_type = VideoCodecMode::kRealtimeVideo,
+      bool frame_drop = true);
 
   // Decodes video, collects and returns decode metrics.
   static std::unique_ptr<VideoCodecStats> RunDecodeTest(
@@ -207,6 +212,7 @@ class VideoCodecTester {
 
   // Encodes video, collects and returns encode metrics.
   static std::unique_ptr<VideoCodecStats> RunEncodeTest(
+      const Environment& env,
       const VideoSourceSettings& source_settings,
       VideoEncoderFactory* encoder_factory,
       const EncoderSettings& encoder_settings,
