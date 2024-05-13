@@ -86,9 +86,6 @@ ACTIVE_FIELD_TRIALS: FrozenSet[FieldTrial] = frozenset([
     FieldTrial('WebRTC-JitterEstimatorConfig',
                42224404,
                date(2024, 4, 1)),
-    FieldTrial('WebRTC-LibaomAv1Encoder-DisableFrameDropping',
-               42225542,
-               date(2024, 4, 1)),
     FieldTrial('WebRTC-LibaomAv1Encoder-MaxConsecFrameDrop',
                42226184,
                date(2024, 4, 1)),
@@ -484,9 +481,6 @@ POLICY_EXEMPT_FIELD_TRIALS: FrozenSet[FieldTrial] = frozenset([
     FieldTrial('WebRTC-AutomaticAnimationDetectionScreenshare',
                42221141,
                date(2024, 4, 1)),
-    FieldTrial('WebRTC-Avx2SupportKillSwitch',
-               42221774,
-               date(2024, 4, 1)),
     FieldTrial('WebRTC-BindUsingInterfaceName',
                42220770,
                date(2024, 4, 1)),
@@ -742,9 +736,6 @@ POLICY_EXEMPT_FIELD_TRIALS: FrozenSet[FieldTrial] = frozenset([
     FieldTrial('WebRTC-SetSocketReceiveBuffer',
                42223976,
                date(2024, 4, 1)),
-    FieldTrial('WebRTC-SignalNetworkPreferenceChange',
-               42221944,
-               date(2024, 4, 1)),
     FieldTrial('WebRTC-SimulcastEncoderAdapter-GetEncoderInfoOverride',
                NO_BUG,
                date(2024, 4, 1)),
@@ -884,7 +875,7 @@ POLICY_EXEMPT_FIELD_TRIALS: FrozenSet[FieldTrial] = frozenset([
 ])  # yapf: disable
 
 POLICY_EXEMPT_FIELD_TRIALS_DIGEST: str = \
-    'a84804e20ae8a5f63996e59560ca97d724665c20'
+    'b0b0cce63bfdf327229b569576a07b716db186b7'
 
 REGISTERED_FIELD_TRIALS: FrozenSet[FieldTrial] = ACTIVE_FIELD_TRIALS.union(
     POLICY_EXEMPT_FIELD_TRIALS)

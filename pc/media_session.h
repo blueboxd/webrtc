@@ -13,24 +13,22 @@
 #ifndef PC_MEDIA_SESSION_H_
 #define PC_MEDIA_SESSION_H_
 
-#include <map>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "api/crypto/crypto_options.h"
 #include "api/media_types.h"
+#include "api/rtc_error.h"
 #include "api/rtp_parameters.h"
 #include "api/rtp_transceiver_direction.h"
-#include "media/base/media_constants.h"
+#include "media/base/codec.h"
 #include "media/base/rid_description.h"
 #include "media/base/stream_params.h"
 #include "p2p/base/ice_credentials_iterator.h"
 #include "p2p/base/transport_description.h"
 #include "p2p/base/transport_description_factory.h"
 #include "p2p/base/transport_info.h"
-#include "pc/jsep_transport.h"
-#include "pc/media_protocol_names.h"
 #include "pc/session_description.h"
 #include "pc/simulcast_description.h"
 #include "rtc_base/memory/always_valid_pointer.h"
@@ -90,6 +88,9 @@ struct MediaDescriptionOptions {
   std::vector<SenderOptions> sender_options;
   std::vector<webrtc::RtpCodecCapability> codec_preferences;
   std::vector<webrtc::RtpHeaderExtensionCapability> header_extensions;
+  // Codecs to include in a generated offer or answer.
+  // If this is used, session-level codec lists MUST be ignored.
+  std::vector<Codec> codecs_to_include;
 
  private:
   // Doesn't DCHECK on `type`.
