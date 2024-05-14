@@ -452,6 +452,14 @@ bool ScreenCapturerMac::RegisterRefreshAndMoveHandlers() {
       CGDirectDisplayID display_id = config.id;
       DesktopVector display_origin = config.pixel_bounds.top_left();
 
+    desktop_config_ = desktop_config_monitor_->desktop_configuration();
+    for (const auto& config : desktop_config_.displays) {
+      size_t pixel_width = config.pixel_bounds.width();
+      size_t pixel_height = config.pixel_bounds.height();
+      if (pixel_width == 0 || pixel_height == 0) continue;
+      CGDirectDisplayID display_id = config.id;
+      DesktopVector display_origin = config.pixel_bounds.top_left();
+
       CGDisplayStreamFrameAvailableHandler handler = ^(CGDisplayStreamFrameStatus status,
                                                       uint64_t display_time,
                                                       IOSurfaceRef frame_surface,

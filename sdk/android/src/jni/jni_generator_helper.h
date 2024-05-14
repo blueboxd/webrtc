@@ -39,6 +39,22 @@
 #define JNI_GENERATOR_EXPORT extern "C" JNIEXPORT JNICALL
 #endif
 
+#if defined(WEBRTC_ARCH_X86)
+// Dalvik JIT generated code doesn't guarantee 16-byte stack alignment on
+// x86 - use force_align_arg_pointer to realign the stack at the JNI
+// boundary. crbug.com/655248
+#define JNI_BOUNDARY_EXPORT \
+  extern "C" __attribute__((visibility("default"), force_align_arg_pointer))
+#else
+#define JNI_BOUNDARY_EXPORT extern "C" __attribute__((visibility("default")))
+#endif
+
+#if defined(COMPONENT_BUILD)
+#define JNI_ZERO_COMPONENT_BUILD_EXPORT __attribute__((visibility("default")))
+#else
+#define JNI_ZERO_COMPONENT_BUILD_EXPORT
+#endif
+
 #define CHECK_EXCEPTION(jni)        \
   RTC_CHECK(!jni->ExceptionCheck()) \
       << (jni->ExceptionDescribe(), jni->ExceptionClear(), "")
@@ -77,20 +93,14 @@ class MethodID {
 
 }  // namespace webrtc
 
+namespace jni_zero {
 // Re-export relevant classes into the namespaces the script expects.
-namespace base {
-namespace android {
-
 using webrtc::JavaParamRef;
 using webrtc::JavaRef;
 using webrtc::LazyGetClass;
 using webrtc::MethodID;
 using webrtc::ScopedJavaLocalRef;
 
-}  // namespace android
-}  // namespace base
-
-namespace jni_generator {
 inline void CheckException(JNIEnv* env) {
   CHECK_EXCEPTION(env);
 }
@@ -112,7 +122,7 @@ struct BASE_EXPORT JniJavaCallContextUnchecked {
   }
 
   // Force no inline to reduce code size.
-  template <base::android::MethodID::Type type>
+  template <jni_zero::MethodID::Type type>
   void Init(JNIEnv* env,
             jclass clazz,
             const char* method_name,
@@ -125,7 +135,7 @@ struct BASE_EXPORT JniJavaCallContextUnchecked {
     // Gets PC of the calling function.
     pc = reinterpret_cast<uintptr_t>(__builtin_return_address(0));
 
-    method_id = base::android::MethodID::LazyGet<type>(
+    method_id = jni_zero::MethodID::LazyGet<type>(
         env, clazz, method_name, jni_signature, atomic_method_id);
   }
 
@@ -145,7 +155,7 @@ struct BASE_EXPORT JniJavaCallContextUnchecked {
 // Context about the JNI call with exception unchecked to be stored in stack.
 struct BASE_EXPORT JniJavaCallContextChecked {
   // Force no inline to reduce code size.
-  template <base::android::MethodID::Type type>
+  template <jni_zero::MethodID::Type type>
   void Init(JNIEnv* env,
             jclass clazz,
             const char* method_name,
@@ -156,7 +166,7 @@ struct BASE_EXPORT JniJavaCallContextChecked {
     base.pc = reinterpret_cast<uintptr_t>(__builtin_return_address(0));
   }
 
-  ~JniJavaCallContextChecked() { jni_generator::CheckException(base.env1); }
+  ~JniJavaCallContextChecked() { jni_zero::CheckException(base.env1); }
 
   JniJavaCallContextUnchecked base;
 };
@@ -164,6 +174,36 @@ struct BASE_EXPORT JniJavaCallContextChecked {
 static_assert(sizeof(JniJavaCallContextChecked) ==
                   sizeof(JniJavaCallContextUnchecked),
               "Stack unwinder cannot work with structs of different sizes.");
+
+}  // namespace jni_zero
+
+namespace jni_zero {
+namespace internal {
+using jni_zero::JniJavaCallContextChecked;
+using jni_zero::JniJavaCallContextUnchecked;
+using webrtc::LazyGetClass;
+}  // namespace internal
+}  // namespace jni_zero
+
+// Re-export helpers in the old jni_generator namespace.
+// TODO(b/319078685): Remove once all uses of the jni_generator has been
+// updated.
+namespace jni_generator {
+using jni_zero::JniJavaCallContextChecked;
+using jni_zero::JniJavaCallContextUnchecked;
 }  // namespace jni_generator
 
+// Re-export helpers in the namespaces that the old jni_generator script
+// expects.
+// TODO(b/319078685): Remove once all uses of the jni_generator has been
+// updated.
+namespace base {
+namespace android {
+using webrtc::JavaParamRef;
+using webrtc::JavaRef;
+using webrtc::LazyGetClass;
+using webrtc::MethodID;
+using webrtc::ScopedJavaLocalRef;
+}  // namespace android
+}  // namespace base
 #endif  // SDK_ANDROID_SRC_JNI_JNI_GENERATOR_HELPER_H_
