@@ -2207,7 +2207,8 @@
           "dimensions": {
             "cpu": "x86-64",
             "os": "Ubuntu-22.04"
-          }
+          },
+          "shards": 4
         },
         "test": "svc_tests",
         "test_id_prefix": "ninja://pc:svc_tests/"
@@ -2255,7 +2256,8 @@
           "dimensions": {
             "cpu": "x86-64",
             "os": "Ubuntu-22.04"
-          }
+          },
+          "shards": 4
         },
         "test": "video_engine_tests",
         "test_id_prefix": "ninja://:video_engine_tests/"
@@ -2320,12 +2322,12 @@
           "iPhone 14",
           "--version",
           "17.4",
-          "--out-dir",
-          "${ISOLATED_OUTDIR}",
-          "--xctest",
           "--xcodebuild-sim-runner",
           "--xcode-build-version",
-          "15c500b"
+          "15c500b",
+          "--out-dir",
+          "${ISOLATED_OUTDIR}",
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -2369,12 +2371,12 @@
           "iPhone X",
           "--version",
           "15.5",
-          "--out-dir",
-          "${ISOLATED_OUTDIR}",
-          "--xctest",
           "--xcodebuild-sim-runner",
           "--xcode-build-version",
-          "15c500b"
+          "15c500b",
+          "--out-dir",
+          "${ISOLATED_OUTDIR}",
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -2418,12 +2420,12 @@
           "iPhone X",
           "--version",
           "16.4",
-          "--out-dir",
-          "${ISOLATED_OUTDIR}",
-          "--xctest",
           "--xcodebuild-sim-runner",
           "--xcode-build-version",
-          "15c500b"
+          "15c500b",
+          "--out-dir",
+          "${ISOLATED_OUTDIR}",
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -2467,11 +2469,11 @@
           "iPhone 14",
           "--version",
           "17.4",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -2515,11 +2517,11 @@
           "iPhone X",
           "--version",
           "15.5",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -2563,11 +2565,11 @@
           "iPhone X",
           "--version",
           "16.4",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -2611,11 +2613,11 @@
           "iPhone 14",
           "--version",
           "17.4",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -2659,11 +2661,11 @@
           "iPhone X",
           "--version",
           "15.5",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -2707,11 +2709,11 @@
           "iPhone X",
           "--version",
           "16.4",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -2755,11 +2757,11 @@
           "iPhone 14",
           "--version",
           "17.4",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -2803,11 +2805,11 @@
           "iPhone X",
           "--version",
           "15.5",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -2851,11 +2853,11 @@
           "iPhone X",
           "--version",
           "16.4",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -2899,11 +2901,11 @@
           "iPhone 14",
           "--version",
           "17.4",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -2947,11 +2949,11 @@
           "iPhone X",
           "--version",
           "15.5",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -2995,11 +2997,11 @@
           "iPhone X",
           "--version",
           "16.4",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -3043,11 +3045,11 @@
           "iPhone 14",
           "--version",
           "17.4",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -3092,11 +3094,11 @@
           "iPhone X",
           "--version",
           "15.5",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -3141,11 +3143,11 @@
           "iPhone X",
           "--version",
           "16.4",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -3190,11 +3192,11 @@
           "iPhone 14",
           "--version",
           "17.4",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -3240,11 +3242,11 @@
           "iPhone X",
           "--version",
           "15.5",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -3290,11 +3292,11 @@
           "iPhone X",
           "--version",
           "16.4",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -3340,11 +3342,11 @@
           "iPhone 14",
           "--version",
           "17.4",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -3388,11 +3390,11 @@
           "iPhone X",
           "--version",
           "15.5",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -3436,11 +3438,11 @@
           "iPhone X",
           "--version",
           "16.4",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -3484,11 +3486,11 @@
           "iPhone 14",
           "--version",
           "17.4",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -3532,11 +3534,11 @@
           "iPhone X",
           "--version",
           "15.5",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -3580,11 +3582,11 @@
           "iPhone X",
           "--version",
           "16.4",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -3628,11 +3630,11 @@
           "iPhone 14",
           "--version",
           "17.4",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -3676,11 +3678,11 @@
           "iPhone X",
           "--version",
           "15.5",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -3724,11 +3726,11 @@
           "iPhone X",
           "--version",
           "16.4",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -3772,11 +3774,11 @@
           "iPhone 14",
           "--version",
           "17.4",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -3821,11 +3823,11 @@
           "iPhone X",
           "--version",
           "15.5",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -3870,11 +3872,11 @@
           "iPhone X",
           "--version",
           "16.4",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -3919,12 +3921,12 @@
           "iPhone 14",
           "--version",
           "17.4",
-          "--out-dir",
-          "${ISOLATED_OUTDIR}",
-          "--xctest",
           "--xcodebuild-sim-runner",
           "--xcode-build-version",
-          "15c500b"
+          "15c500b",
+          "--out-dir",
+          "${ISOLATED_OUTDIR}",
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -3968,12 +3970,12 @@
           "iPhone X",
           "--version",
           "15.5",
-          "--out-dir",
-          "${ISOLATED_OUTDIR}",
-          "--xctest",
           "--xcodebuild-sim-runner",
           "--xcode-build-version",
-          "15c500b"
+          "15c500b",
+          "--out-dir",
+          "${ISOLATED_OUTDIR}",
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -4017,12 +4019,12 @@
           "iPhone X",
           "--version",
           "16.4",
-          "--out-dir",
-          "${ISOLATED_OUTDIR}",
-          "--xctest",
           "--xcodebuild-sim-runner",
           "--xcode-build-version",
-          "15c500b"
+          "15c500b",
+          "--out-dir",
+          "${ISOLATED_OUTDIR}",
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -4066,12 +4068,12 @@
           "iPhone 14",
           "--version",
           "17.4",
-          "--out-dir",
-          "${ISOLATED_OUTDIR}",
-          "--xctest",
           "--xcodebuild-sim-runner",
           "--xcode-build-version",
-          "15c500b"
+          "15c500b",
+          "--out-dir",
+          "${ISOLATED_OUTDIR}",
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -4115,12 +4117,12 @@
           "iPhone X",
           "--version",
           "15.5",
-          "--out-dir",
-          "${ISOLATED_OUTDIR}",
-          "--xctest",
           "--xcodebuild-sim-runner",
           "--xcode-build-version",
-          "15c500b"
+          "15c500b",
+          "--out-dir",
+          "${ISOLATED_OUTDIR}",
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -4164,12 +4166,12 @@
           "iPhone X",
           "--version",
           "16.4",
-          "--out-dir",
-          "${ISOLATED_OUTDIR}",
-          "--xctest",
           "--xcodebuild-sim-runner",
           "--xcode-build-version",
-          "15c500b"
+          "15c500b",
+          "--out-dir",
+          "${ISOLATED_OUTDIR}",
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -4213,11 +4215,11 @@
           "iPhone 14",
           "--version",
           "17.4",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -4263,11 +4265,11 @@
           "iPhone X",
           "--version",
           "15.5",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -4313,11 +4315,11 @@
           "iPhone X",
           "--version",
           "16.4",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -4363,11 +4365,11 @@
           "iPhone 14",
           "--version",
           "17.4",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -4411,11 +4413,11 @@
           "iPhone X",
           "--version",
           "15.5",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -4459,11 +4461,11 @@
           "iPhone X",
           "--version",
           "16.4",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -4507,11 +4509,11 @@
           "iPhone 14",
           "--version",
           "17.4",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -4555,11 +4557,11 @@
           "iPhone X",
           "--version",
           "15.5",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -4603,11 +4605,11 @@
           "iPhone X",
           "--version",
           "16.4",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -4651,11 +4653,11 @@
           "iPhone 14",
           "--version",
           "17.4",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -4699,11 +4701,11 @@
           "iPhone X",
           "--version",
           "15.5",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -4747,11 +4749,11 @@
           "iPhone X",
           "--version",
           "16.4",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -4795,11 +4797,11 @@
           "iPhone 14",
           "--version",
           "17.4",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -4844,11 +4846,11 @@
           "iPhone X",
           "--version",
           "15.5",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -4893,11 +4895,11 @@
           "iPhone X",
           "--version",
           "16.4",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -4942,11 +4944,11 @@
           "iPhone 14",
           "--version",
           "17.4",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -4990,11 +4992,11 @@
           "iPhone X",
           "--version",
           "15.5",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -5038,11 +5040,11 @@
           "iPhone X",
           "--version",
           "16.4",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -5086,11 +5088,11 @@
           "iPhone 14",
           "--version",
           "17.4",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -5134,11 +5136,11 @@
           "iPhone X",
           "--version",
           "15.5",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -5182,11 +5184,11 @@
           "iPhone X",
           "--version",
           "16.4",
+          "--xcode-build-version",
+          "15c500b",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
-          "--xctest",
-          "--xcode-build-version",
-          "15c500b"
+          "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
@@ -6351,356 +6353,6 @@
     ]
   },
   "linux_libfuzzer_rel": {},
-  "linux_memcheck": {
-    "isolated_scripts": [
-      {
-        "merge": {
-          "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
-        },
-        "name": "audio_decoder_unittests",
-        "resultdb": {
-          "result_format": "json"
-        },
-        "swarming": {
-          "dimensions": {
-            "cpu": "x86-64",
-            "os": "Ubuntu-22.04"
-          }
-        },
-        "test": "audio_decoder_unittests",
-        "test_id_prefix": "ninja://modules/audio_coding:audio_decoder_unittests/"
-      },
-      {
-        "merge": {
-          "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
-        },
-        "name": "common_audio_unittests",
-        "resultdb": {
-          "result_format": "json"
-        },
-        "swarming": {
-          "dimensions": {
-            "cpu": "x86-64",
-            "os": "Ubuntu-22.04"
-          }
-        },
-        "test": "common_audio_unittests",
-        "test_id_prefix": "ninja://common_audio:common_audio_unittests/"
-      },
-      {
-        "merge": {
-          "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
-        },
-        "name": "common_video_unittests",
-        "resultdb": {
-          "result_format": "json"
-        },
-        "swarming": {
-          "dimensions": {
-            "cpu": "x86-64",
-            "os": "Ubuntu-22.04"
-          }
-        },
-        "test": "common_video_unittests",
-        "test_id_prefix": "ninja://common_video:common_video_unittests/"
-      },
-      {
-        "merge": {
-          "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
-        },
-        "name": "dcsctp_unittests",
-        "resultdb": {
-          "result_format": "json"
-        },
-        "swarming": {
-          "dimensions": {
-            "cpu": "x86-64",
-            "os": "Ubuntu-22.04"
-          }
-        },
-        "test": "dcsctp_unittests",
-        "test_id_prefix": "ninja://net/dcsctp:dcsctp_unittests/"
-      },
-      {
-        "merge": {
-          "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
-        },
-        "name": "modules_tests",
-        "resultdb": {
-          "result_format": "json"
-        },
-        "swarming": {
-          "dimensions": {
-            "cpu": "x86-64",
-            "os": "Ubuntu-22.04"
-          },
-          "shards": 2
-        },
-        "test": "modules_tests",
-        "test_id_prefix": "ninja://modules:modules_tests/"
-      },
-      {
-        "merge": {
-          "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
-        },
-        "name": "modules_unittests",
-        "resultdb": {
-          "result_format": "json"
-        },
-        "swarming": {
-          "dimensions": {
-            "cpu": "x86-64",
-            "os": "Ubuntu-22.04"
-          },
-          "shards": 6
-        },
-        "test": "modules_unittests",
-        "test_id_prefix": "ninja://modules:modules_unittests/"
-      },
-      {
-        "merge": {
-          "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
-        },
-        "name": "peerconnection_unittests",
-        "resultdb": {
-          "result_format": "json"
-        },
-        "swarming": {
-          "dimensions": {
-            "cpu": "x86-64",
-            "os": "Ubuntu-22.04"
-          },
-          "shards": 4
-        },
-        "test": "peerconnection_unittests",
-        "test_id_prefix": "ninja://pc:peerconnection_unittests/"
-      },
-      {
-        "merge": {
-          "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
-        },
-        "name": "rtc_media_unittests",
-        "resultdb": {
-          "result_format": "json"
-        },
-        "swarming": {
-          "dimensions": {
-            "cpu": "x86-64",
-            "os": "Ubuntu-22.04"
-          }
-        },
-        "test": "rtc_media_unittests",
-        "test_id_prefix": "ninja://media:rtc_media_unittests/"
-      },
-      {
-        "merge": {
-          "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
-        },
-        "name": "rtc_pc_unittests",
-        "resultdb": {
-          "result_format": "json"
-        },
-        "swarming": {
-          "dimensions": {
-            "cpu": "x86-64",
-            "os": "Ubuntu-22.04"
-          }
-        },
-        "test": "rtc_pc_unittests",
-        "test_id_prefix": "ninja://pc:rtc_pc_unittests/"
-      },
-      {
-        "merge": {
-          "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
-        },
-        "name": "rtc_stats_unittests",
-        "resultdb": {
-          "result_format": "json"
-        },
-        "swarming": {
-          "dimensions": {
-            "cpu": "x86-64",
-            "os": "Ubuntu-22.04"
-          }
-        },
-        "test": "rtc_stats_unittests",
-        "test_id_prefix": "ninja://stats:rtc_stats_unittests/"
-      },
-      {
-        "merge": {
-          "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
-        },
-        "name": "rtc_unittests",
-        "resultdb": {
-          "result_format": "json"
-        },
-        "swarming": {
-          "dimensions": {
-            "cpu": "x86-64",
-            "os": "Ubuntu-22.04"
-          },
-          "shards": 6
-        },
-        "test": "rtc_unittests",
-        "test_id_prefix": "ninja://:rtc_unittests/"
-      },
-      {
-        "merge": {
-          "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
-        },
-        "name": "shared_screencast_stream_test",
-        "resultdb": {
-          "result_format": "json"
-        },
-        "swarming": {
-          "dimensions": {
-            "cpu": "x86-64",
-            "os": "Ubuntu-22.04"
-          }
-        },
-        "test": "shared_screencast_stream_test",
-        "test_id_prefix": "ninja://modules/desktop_capture:shared_screencast_stream_test/"
-      },
-      {
-        "merge": {
-          "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
-        },
-        "name": "slow_peer_connection_unittests",
-        "resultdb": {
-          "result_format": "json"
-        },
-        "swarming": {
-          "dimensions": {
-            "cpu": "x86-64",
-            "os": "Ubuntu-22.04"
-          }
-        },
-        "test": "slow_peer_connection_unittests",
-        "test_id_prefix": "ninja://pc:slow_peer_connection_unittests/"
-      },
-      {
-        "merge": {
-          "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
-        },
-        "name": "svc_tests",
-        "resultdb": {
-          "result_format": "json"
-        },
-        "swarming": {
-          "dimensions": {
-            "cpu": "x86-64",
-            "os": "Ubuntu-22.04"
-          },
-          "shards": 4
-        },
-        "test": "svc_tests",
-        "test_id_prefix": "ninja://pc:svc_tests/"
-      },
-      {
-        "merge": {
-          "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
-        },
-        "name": "system_wrappers_unittests",
-        "resultdb": {
-          "result_format": "json"
-        },
-        "swarming": {
-          "dimensions": {
-            "cpu": "x86-64",
-            "os": "Ubuntu-22.04"
-          }
-        },
-        "test": "system_wrappers_unittests",
-        "test_id_prefix": "ninja://system_wrappers:system_wrappers_unittests/"
-      },
-      {
-        "merge": {
-          "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
-        },
-        "name": "test_support_unittests",
-        "resultdb": {
-          "result_format": "json"
-        },
-        "swarming": {
-          "dimensions": {
-            "cpu": "x86-64",
-            "os": "Ubuntu-22.04"
-          }
-        },
-        "test": "test_support_unittests",
-        "test_id_prefix": "ninja://test:test_support_unittests/"
-      },
-      {
-        "merge": {
-          "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
-        },
-        "name": "tools_unittests",
-        "resultdb": {
-          "result_format": "json"
-        },
-        "swarming": {
-          "dimensions": {
-            "cpu": "x86-64",
-            "os": "Ubuntu-22.04"
-          }
-        },
-        "test": "tools_unittests",
-        "test_id_prefix": "ninja://rtc_tools:tools_unittests/"
-      },
-      {
-        "merge": {
-          "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
-        },
-        "name": "video_engine_tests",
-        "resultdb": {
-          "result_format": "json"
-        },
-        "swarming": {
-          "dimensions": {
-            "cpu": "x86-64",
-            "os": "Ubuntu-22.04"
-          },
-          "shards": 4
-        },
-        "test": "video_engine_tests",
-        "test_id_prefix": "ninja://:video_engine_tests/"
-      },
-      {
-        "merge": {
-          "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
-        },
-        "name": "voip_unittests",
-        "resultdb": {
-          "result_format": "json"
-        },
-        "swarming": {
-          "dimensions": {
-            "cpu": "x86-64",
-            "os": "Ubuntu-22.04"
-          }
-        },
-        "test": "voip_unittests",
-        "test_id_prefix": "ninja://:voip_unittests/"
-      },
-      {
-        "merge": {
-          "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
-        },
-        "name": "webrtc_nonparallel_tests",
-        "resultdb": {
-          "result_format": "json"
-        },
-        "swarming": {
-          "dimensions": {
-            "cpu": "x86-64",
-            "os": "Ubuntu-22.04"
-          }
-        },
-        "test": "webrtc_nonparallel_tests",
-        "test_id_prefix": "ninja://:webrtc_nonparallel_tests/"
-      }
-    ]
-  },
   "linux_more_configs": {
     "isolated_scripts": [
       {

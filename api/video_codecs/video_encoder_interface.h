@@ -13,7 +13,6 @@
 
 #include <map>
 #include <memory>
-// #include <unordered_set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -22,6 +21,7 @@
 #include "absl/types/optional.h"
 #include "absl/types/variant.h"
 #include "api/units/data_rate.h"
+#include "api/units/data_size.h"
 #include "api/units/time_delta.h"
 #include "api/units/timestamp.h"
 #include "api/video/encoded_image.h"
@@ -38,10 +38,22 @@ class VideoEncoderInterface {
   virtual ~VideoEncoderInterface() = default;
   enum class FrameType { kKeyframe, kStartFrame, kDeltaFrame };
 
+  struct EncodingError {};
+  struct EncodedData {
+    FrameType frame_type;
+    int encoded_qp;
+  };
+  using EncodeResult = absl::variant<EncodingError, EncodedData>;
+
+  struct FrameOutput {
+    virtual ~FrameOutput() = default;
+    virtual rtc::ArrayView<uint8_t> GetBitstreamOutputBuffer(DataSize size) = 0;
+    virtual void EncodeComplete(const EncodeResult& encode_result) = 0;
+  };
+
   struct TemporalUnitSettings {
     VideoCodecMode content_hint = VideoCodecMode::kRealtimeVideo;
     Timestamp presentation_timestamp;
-    int effort_level = 0;
   };
 
   struct FrameEncodeSettings {
@@ -62,26 +74,14 @@ class VideoEncoderInterface {
     Resolution resolution;
     std::vector<int> reference_buffers;
     absl::optional<int> update_buffer;
+    int effort_level = 0;
+
+    std::unique_ptr<FrameOutput> frame_output;
   };
-
-  // Results from calling Encode. Called once for each configured frame.
-  struct EncodingError {};
-
-  struct EncodedData {
-    rtc::scoped_refptr<EncodedImageBufferInterface> bitstream_data;
-    FrameType frame_type;
-    int spatial_id;
-    int encoded_qp;
-  };
-
-  using EncodeResult = std::variant<EncodingError, EncodedData>;
-  using EncodeResultCallback =
-      absl::AnyInvocable<void(const EncodeResult& result)>;
 
   virtual void Encode(rtc::scoped_refptr<webrtc::VideoFrameBuffer> frame_buffer,
                       const TemporalUnitSettings& settings,
-                      const std::vector<FrameEncodeSettings>& frame_settings,
-                      EncodeResultCallback encode_result_callback) = 0;
+                      std::vector<FrameEncodeSettings> frame_settings) = 0;
 };
 
 }  // namespace webrtc

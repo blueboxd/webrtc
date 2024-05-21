@@ -264,6 +264,7 @@ rtc_source_set("video_bitrate_allocator_factory") {
   sources = [ "video_bitrate_allocator_factory.h" ]
   deps = [
     ":video_bitrate_allocator",
+    "../environment",
     "../video_codecs:video_codecs_api",
   ]
 }

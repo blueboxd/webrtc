@@ -52,7 +52,6 @@ rtc_library("video_codecs_api") {
     "sdp_video_format.h",
     "simulcast_stream.cc",
     "simulcast_stream.h",
-    "spatial_layer.cc",
     "spatial_layer.h",
     "video_codec.cc",
     "video_codec.h",
@@ -290,6 +289,7 @@ rtc_source_set("video_encoder_interface") {
   deps = [
     ":video_encoding_general",
     "../../api/units:data_rate",
+    "../../api/units:data_size",
     "../../api/units:time_delta",
     "../../api/units:timestamp",
     "../../api/video:encoded_image",
@@ -343,6 +343,7 @@ rtc_library("simple_encoder_wrapper") {
   absl_deps = [
     "//third_party/abseil-cpp/absl/algorithm:container",
     "//third_party/abseil-cpp/absl/functional:any_invocable",
+    "//third_party/abseil-cpp/absl/types:variant",
   ]
 }
 
@@ -378,7 +379,10 @@ rtc_library("libaom_av1_encoder_factory") {
     "//third_party/libaom",
   ]
 
-  absl_deps = [ "//third_party/abseil-cpp/absl/algorithm:container" ]
+  absl_deps = [
+    "//third_party/abseil-cpp/absl/algorithm:container",
+    "//third_party/abseil-cpp/absl/cleanup",
+  ]
 }
 
 rtc_library("libaom_av1_encoder_factory_test") {
@@ -398,6 +402,8 @@ rtc_library("libaom_av1_encoder_factory_test") {
     "../../test:test_support",
     "../../test:video_test_support",
   ]
+
+  absl_deps = [ "//third_party/abseil-cpp/absl/types:variant" ]
 }
 
 rtc_library("vp8_temporal_layers_factory") {

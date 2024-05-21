@@ -1601,11 +1601,12 @@ class VideoStreamEncoderTest : public ::testing::Test {
         : bitrate_allocator_factory_(
               CreateBuiltinVideoBitrateAllocatorFactory()) {}
 
-    std::unique_ptr<VideoBitrateAllocator> CreateVideoBitrateAllocator(
+    std::unique_ptr<VideoBitrateAllocator> Create(
+        const Environment& env,
         const VideoCodec& codec) override {
       MutexLock lock(&mutex_);
       codec_config_ = codec;
-      return bitrate_allocator_factory_->CreateVideoBitrateAllocator(codec);
+      return bitrate_allocator_factory_->Create(env, codec);
     }
 
     VideoCodec codec_config() const {
@@ -4780,7 +4781,7 @@ TEST_F(VideoStreamEncoderTest, ReportsVideoBitrateAllocation) {
 
   const int kDefaultFps = 30;
   const VideoBitrateAllocation expected_bitrate =
-      SimulcastRateAllocator(fake_encoder_.config())
+      SimulcastRateAllocator(env_, fake_encoder_.config())
           .Allocate(VideoBitrateAllocationParameters(kLowTargetBitrate.bps(),
                                                      kDefaultFps));
 
@@ -7299,8 +7300,7 @@ TEST_F(VideoStreamEncoderTest, DropsFramesWhenEncoderOvershoots) {
   // of video, verify number of drops. Rate needs to be slightly changed in
   // order to force the rate to be reconfigured.
   double overshoot_factor = 2.0;
-  const RateControlSettings trials =
-      RateControlSettings::ParseFromFieldTrials();
+  const RateControlSettings trials(env_.field_trials());
   if (trials.UseEncoderBitrateAdjuster()) {
     // With bitrate adjuster, when need to overshoot even more to trigger
     // frame dropping since the adjuter will try to just lower the target
