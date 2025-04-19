@@ -11,13 +11,17 @@
 #ifndef API_FRAME_TRANSFORMER_INTERFACE_H_
 #define API_FRAME_TRANSFORMER_INTERFACE_H_
 
+#include <cstdint>
 #include <memory>
 #include <string>
 
+#include "absl/types/optional.h"
+#include "api/array_view.h"
 #include "api/ref_count.h"
 #include "api/scoped_refptr.h"
-#include "api/video/encoded_frame.h"
+#include "api/units/timestamp.h"
 #include "api/video/video_frame_metadata.h"
+#include "rtc_base/system/rtc_export.h"
 
 namespace webrtc {
 
@@ -101,10 +105,14 @@ class TransformableAudioFrameInterface : public TransformableFrameInterface {
   // dBov. 127 represents digital silence. Only present on remote frames if
   // the audio level header extension was included.
   virtual absl::optional<uint8_t> AudioLevel() const = 0;
+
+  // Timestamp at which the packet has been first seen on the network interface.
+  // Only defined for received audio packet.
+  virtual absl::optional<Timestamp> ReceiveTime() const = 0;
 };
 
 // Objects implement this interface to be notified with the transformed frame.
-class TransformedFrameCallback : public rtc::RefCountInterface {
+class TransformedFrameCallback : public RefCountInterface {
  public:
   virtual void OnTransformedFrame(
       std::unique_ptr<TransformableFrameInterface> frame) = 0;
@@ -121,7 +129,7 @@ class TransformedFrameCallback : public rtc::RefCountInterface {
 
 // Transforms encoded frames. The transformed frame is sent in a callback using
 // the TransformedFrameCallback interface (see above).
-class FrameTransformerInterface : public rtc::RefCountInterface {
+class FrameTransformerInterface : public RefCountInterface {
  public:
   // Transforms `frame` using the implementing class' processing logic.
   virtual void Transform(

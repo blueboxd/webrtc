@@ -67,7 +67,6 @@ if (rtc_include_tests) {
         "../../rtc_base/third_party/base64",
         "../../system_wrappers",
         "../../test:test_support",
-        "../../test:video_test_support",
       ]
       sources += [
         "screen_capturer_integration_test.cc",
@@ -628,6 +627,8 @@ if (is_mac) {
       "mac/desktop_frame_provider.mm",
       "mac/screen_capturer_mac.h",
       "mac/screen_capturer_mac.mm",
+      "mac/screen_capturer_sck.h",
+      "mac/screen_capturer_sck.mm",
       "mac/window_list_utils.h",
       "mouse_cursor.h",
       "mouse_cursor_monitor.h",
@@ -657,9 +658,11 @@ if (is_mac) {
     ]
     frameworks = [
       "AppKit.framework",
+      "CoreVideo.framework",
       "IOKit.framework",
       "IOSurface.framework",
     ]
+    weak_frameworks = [ "ScreenCaptureKit.framework" ]  # macOS 12.3
   }
 }
 

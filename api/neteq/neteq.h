@@ -12,25 +12,23 @@
 #define API_NETEQ_NETEQ_H_
 
 #include <stddef.h>  // Provide access to size_t.
+#include <stdint.h>
 
 #include <map>
 #include <string>
 #include <vector>
 
 #include "absl/types/optional.h"
+#include "api/array_view.h"
 #include "api/audio_codecs/audio_codec_pair_id.h"
-#include "api/audio_codecs/audio_decoder.h"
 #include "api/audio_codecs/audio_format.h"
 #include "api/rtp_headers.h"
-#include "api/scoped_refptr.h"
 #include "api/units/timestamp.h"
 
 namespace webrtc {
 
 // Forward declarations.
 class AudioFrame;
-class AudioDecoderFactory;
-class Clock;
 
 struct NetEqNetworkStatistics {
   uint16_t current_buffer_size_ms;    // Current jitter buffer size in ms.
@@ -94,6 +92,7 @@ struct NetEqLifetimeStatistics {
   int32_t total_interruption_duration_ms = 0;
   // Total number of comfort noise samples generated during DTX.
   uint64_t generated_noise_samples = 0;
+  uint64_t total_processing_delay_us = 0;
 };
 
 // Metrics that describe the operations performed in NetEq, and the internal
@@ -184,10 +183,9 @@ class NetEq {
 
   virtual ~NetEq() {}
 
-  ABSL_DEPRECATED("Use the overload with receive time")
   virtual int InsertPacket(const RTPHeader& rtp_header,
                            rtc::ArrayView<const uint8_t> payload) {
-    // TODO: webrtc:xxxxx - removed unused method.
+    // TODO: webrtc:343501093 - removed unused method.
     return InsertPacket(rtp_header, payload,
                         /*receive_time=*/Timestamp::MinusInfinity());
   }
@@ -195,7 +193,10 @@ class NetEq {
   // Returns 0 on success, -1 on failure.
   virtual int InsertPacket(const RTPHeader& rtp_header,
                            rtc::ArrayView<const uint8_t> payload,
-                           Timestamp receive_time) = 0;
+                           Timestamp receive_time) {
+    // TODO: webrtc:343501093 - Make this method pure virtual.
+    return InsertPacket(rtp_header, payload);
+  }
 
   // Lets NetEq know that a packet arrived with an empty payload. This typically
   // happens when empty packets are used for probing the network channel, and

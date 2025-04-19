@@ -15,9 +15,13 @@ if (is_android) {
 
 if (!rtc_build_ssl) {
   config("external_ssl_library") {
-    assert(rtc_ssl_root != "",
-           "You must specify rtc_ssl_root when rtc_build_ssl==0.")
-    include_dirs = [ rtc_ssl_root ]
+    if (rtc_ssl_root != "") {
+      include_dirs = [ rtc_ssl_root ]
+    }
+    libs = [
+      "crypto",
+      "ssl",
+    ]
   }
 }
 
@@ -818,6 +822,7 @@ rtc_library("rtc_stats_counters") {
     "numerics/sample_stats.h",
   ]
   deps = [
+    ":checks",
     "../api/numerics",
     "../api/units:data_rate",
     "../api/units:time_delta",
@@ -1413,7 +1418,7 @@ rtc_library("unique_id_generator") {
     "unique_id_generator.h",
   ]
   deps = [
-    ":ssl",
+    ":crypto_random",
     ":stringutils",
     "../api:array_view",
     "../api:sequence_checker",
@@ -1503,11 +1508,31 @@ rtc_source_set("digest") {
   }
 }
 
+rtc_library("crypto_random") {
+  visibility = [ "*" ]
+  sources = [
+    "crypto_random.cc",
+    "crypto_random.h",
+  ]
+  deps = [
+    ":checks",
+    ":logging",
+    "synchronization:mutex",
+    "system:rtc_export",
+    "//third_party/abseil-cpp/absl/strings:string_view",
+  ]
+
+  # If we are building the SSL library ourselves, we know it's BoringSSL.
+  if (rtc_build_ssl) {
+    deps += [ "//third_party/boringssl" ]
+  } else {
+    configs += [ ":external_ssl_library" ]
+  }
+}
+
 rtc_library("ssl") {
   visibility = [ "*" ]
   sources = [
-    "helpers.cc",
-    "helpers.h",
     "openssl_key_pair.cc",
     "openssl_key_pair.h",
     "openssl_utility.cc",
@@ -1523,7 +1548,6 @@ rtc_library("ssl") {
   ]
 
   deps = [
-    ":async_socket",
     ":buffer",
     ":checks",
     ":copy_on_write_buffer",
@@ -1531,30 +1555,18 @@ rtc_library("ssl") {
     ":logging",
     ":macromagic",
     ":safe_conversions",
-    ":socket",
-    ":socket_address",
     ":ssl_header",
-    ":stream",
     ":stringutils",
-    ":threading",
     ":timeutils",
     "../api:array_view",
     "../api:refcountedbase",
     "../api:scoped_refptr",
-    "../api/task_queue:pending_task_safety_flag",
-    "../api/units:time_delta",
-    "../system_wrappers:field_trial",
-    "synchronization:mutex",
     "system:rtc_export",
-    "task_utils:repeating_task",
     "third_party/base64",
-    "third_party/sigslot",
     "//third_party/abseil-cpp/absl/algorithm:container",
     "//third_party/abseil-cpp/absl/base:core_headers",
-    "//third_party/abseil-cpp/absl/functional:any_invocable",
     "//third_party/abseil-cpp/absl/memory",
     "//third_party/abseil-cpp/absl/strings:string_view",
-    "//third_party/abseil-cpp/absl/types:optional",
   ]
 
   # If we are building the SSL library ourselves, we know it's BoringSSL.
@@ -1566,7 +1578,10 @@ rtc_library("ssl") {
       "boringssl_identity.h",
     ]
 
-    deps += [ "//third_party/boringssl" ]
+    deps += [
+      ":crypto_random",
+      "//third_party/boringssl",
+    ]
   } else {
     sources += [
       "openssl_certificate.cc",
@@ -1574,6 +1589,7 @@ rtc_library("ssl") {
       "openssl_identity.cc",
       "openssl_identity.h",
     ]
+    deps += [ ":crypto_random" ]
 
     configs += [ ":external_ssl_library" ]
   }
@@ -1620,6 +1636,7 @@ rtc_library("ssl_adapter") {
     ":threading",
     ":timeutils",
     "../api:array_view",
+    "../api:sequence_checker",
     "../api/task_queue:pending_task_safety_flag",
     "../api/units:time_delta",
     "../system_wrappers:field_trial",
@@ -1938,6 +1955,7 @@ if (rtc_include_tests) {
         ":checks",
         ":copy_on_write_buffer",
         ":criticalsection",
+        ":crypto_random",
         ":divide_round",
         ":event_tracer",
         ":frequency_tracker",
@@ -2055,11 +2073,13 @@ if (rtc_include_tests) {
         "numerics/sequence_number_util_unittest.cc",
       ]
       deps = [
+        ":mod_ops",
         ":rtc_numerics",
         ":timeutils",
         "../test:test_main",
         "../test:test_support",
         "//third_party/abseil-cpp/absl/algorithm:container",
+        "//third_party/abseil-cpp/absl/types:optional",
       ]
     }
 
@@ -2082,9 +2102,9 @@ if (rtc_include_tests) {
 
       sources = [
         "crc32_unittest.cc",
+        "crypto_random_unittest.cc",
         "data_rate_limiter_unittest.cc",
         "fake_clock_unittest.cc",
-        "helpers_unittest.cc",
         "ip_address_unittest.cc",
         "memory_usage_unittest.cc",
         "message_digest_unittest.cc",
@@ -2107,6 +2127,7 @@ if (rtc_include_tests) {
         ":buffer_queue",
         ":checks",
         ":crc32",
+        ":crypto_random",
         ":data_rate_limiter",
         ":digest",
         ":gunit_helpers",
@@ -2142,6 +2163,7 @@ if (rtc_include_tests) {
         "../api:array_view",
         "../api:field_trials_view",
         "../api:make_ref_counted",
+        "../api:sequence_checker",
         "../api/task_queue",
         "../api/task_queue:pending_task_safety_flag",
         "../api/task_queue:task_queue_test",
@@ -2156,6 +2178,7 @@ if (rtc_include_tests) {
         "network:received_packet",
         "synchronization:mutex",
         "third_party/sigslot",
+        "//testing/gtest",
         "//third_party/abseil-cpp/absl/algorithm:container",
         "//third_party/abseil-cpp/absl/functional:any_invocable",
         "//third_party/abseil-cpp/absl/memory",

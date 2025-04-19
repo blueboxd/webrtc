@@ -8,8 +8,8 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#ifndef RTC_BASE_HELPERS_H_
-#define RTC_BASE_HELPERS_H_
+#ifndef RTC_BASE_CRYPTO_RANDOM_H_
+#define RTC_BASE_CRYPTO_RANDOM_H_
 
 #include <stddef.h>
 #include <stdint.h>
@@ -85,4 +85,4 @@ double CreateRandomDouble();
 
 }  // namespace rtc
 
-#endif  // RTC_BASE_HELPERS_H_
+#endif  // RTC_BASE_CRYPTO_RANDOM_H_

@@ -26,7 +26,7 @@
 #include "p2p/base/stun_request.h"
 #include "rtc_base/byte_buffer.h"
 #include "rtc_base/checks.h"
-#include "rtc_base/helpers.h"
+#include "rtc_base/crypto_random.h"
 #include "rtc_base/ip_address.h"
 #include "rtc_base/logging.h"
 #include "rtc_base/mdns_responder_interface.h"
@@ -138,42 +138,6 @@ Port::Port(const PortParametersRef& args,
   RTC_LOG(LS_INFO) << ToString() << ": Port created with network cost "
                    << network_cost_;
 }
-
-Port::Port(TaskQueueBase* thread,
-           webrtc::IceCandidateType type,
-           rtc::PacketSocketFactory* factory,
-           const rtc::Network* network,
-           absl::string_view username_fragment,
-           absl::string_view password,
-           const webrtc::FieldTrialsView* field_trials)
-    : Port({.network_thread = thread,
-            .socket_factory = factory,
-            .network = network,
-            .ice_username_fragment = username_fragment,
-            .ice_password = password,
-            .field_trials = field_trials},
-           type) {}
-
-Port::Port(TaskQueueBase* thread,
-           webrtc::IceCandidateType type,
-           rtc::PacketSocketFactory* factory,
-           const rtc::Network* network,
-           uint16_t min_port,
-           uint16_t max_port,
-           absl::string_view username_fragment,
-           absl::string_view password,
-           const webrtc::FieldTrialsView* field_trials,
-           bool shared_socket /*= false*/)
-    : Port({.network_thread = thread,
-            .socket_factory = factory,
-            .network = network,
-            .ice_username_fragment = username_fragment,
-            .ice_password = password,
-            .field_trials = field_trials},
-           type,
-           min_port,
-           max_port,
-           shared_socket) {}
 
 Port::~Port() {
   RTC_DCHECK_RUN_ON(thread_);

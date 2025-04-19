@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "api/audio_codecs/opus/audio_encoder_opus.h"
+#include "api/environment/environment_factory.h"
 #include "modules/audio_coding/codecs/g711/audio_decoder_pcm.h"
 #include "modules/audio_coding/codecs/g711/audio_encoder_pcm.h"
 #include "modules/audio_coding/codecs/g722/audio_decoder_g722.h"
@@ -392,7 +393,8 @@ class AudioDecoderOpusTest
     config.application = opus_num_channels_ == 1
                              ? AudioEncoderOpusConfig::ApplicationMode::kVoip
                              : AudioEncoderOpusConfig::ApplicationMode::kAudio;
-    audio_encoder_ = AudioEncoderOpus::MakeAudioEncoder(config, payload_type_);
+    audio_encoder_ = AudioEncoderOpus::MakeAudioEncoder(
+        CreateEnvironment(), config, {.payload_type = payload_type_});
     audio_encoder_->OnReceivedOverhead(kOverheadBytesPerPacket);
   }
   const int opus_sample_rate_hz_{std::get<0>(GetParam())};
@@ -455,7 +457,12 @@ TEST_F(AudioDecoderPcm16BTest, SetTargetBitrate) {
                                             codec_input_rate_hz_ * 16);
 }
 
+// TODO(bugs.webrtc.org/345525069): Either fix/enable or remove iLBC.
+#if defined(__has_feature) && __has_feature(undefined_behavior_sanitizer)
+TEST_F(AudioDecoderIlbcTest, DISABLED_EncodeDecode) {
+#else
 TEST_F(AudioDecoderIlbcTest, EncodeDecode) {
+#endif
   int tolerance = 6808;
   double mse = 2.13e6;
   int delay = 80;  // Delay from input to output.
@@ -469,7 +476,12 @@ TEST_F(AudioDecoderIlbcTest, SetTargetBitrate) {
   TestSetAndGetTargetBitratesWithFixedCodec(audio_encoder_.get(), 13333);
 }
 
+// TODO(bugs.webrtc.org/345525069): Either fix/enable or remove G722.
+#if defined(__has_feature) && __has_feature(undefined_behavior_sanitizer)
+TEST_F(AudioDecoderG722Test, DISABLED_EncodeDecode) {
+#else
 TEST_F(AudioDecoderG722Test, EncodeDecode) {
+#endif
   int tolerance = 6176;
   double mse = 238630.0;
   int delay = 22;  // Delay from input to output.
@@ -482,7 +494,12 @@ TEST_F(AudioDecoderG722Test, SetTargetBitrate) {
   TestSetAndGetTargetBitratesWithFixedCodec(audio_encoder_.get(), 64000);
 }
 
+// TODO(bugs.webrtc.org/345525069): Either fix/enable or remove G722.
+#if defined(__has_feature) && __has_feature(undefined_behavior_sanitizer)
+TEST_F(AudioDecoderG722StereoTest, DISABLED_EncodeDecode) {
+#else
 TEST_F(AudioDecoderG722StereoTest, EncodeDecode) {
+#endif
   int tolerance = 6176;
   int channel_diff_tolerance = 0;
   double mse = 238630.0;
